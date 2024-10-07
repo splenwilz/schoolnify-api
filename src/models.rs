@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(FromRow, Debug)]
+#[derive(serde::Serialize)] 
 pub struct Tenant {
     pub id: Uuid,
     pub name: String,
@@ -19,7 +19,7 @@ pub struct Tenant {
     pub is_active: Option<bool>,
 }
 
-#[derive(FromRow, Debug)]
+#[derive(serde::Serialize)] 
 pub struct User {
     pub id: Uuid,
     pub email: String,
@@ -33,7 +33,7 @@ pub struct User {
     pub address: Option<String>,
     pub created_at: DateTime<Utc>,
     pub last_login_at: Option<DateTime<Utc>>,
-    pub is_active: bool,
+    pub is_active: Option<bool>,
 }
 
 

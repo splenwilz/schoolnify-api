@@ -1,6 +1,8 @@
 use sqlx::PgPool;
-use crate::models::Tenant;
 use uuid::Uuid;
+
+use crate::models::User;
+use crate::models::Tenant;
 
 pub async fn create_tenant(
     pool: &PgPool,
@@ -102,6 +104,20 @@ pub async fn create_user(
     .await?;
 
     Ok(new_user_id)
+}
+
+pub async fn get_users(pool: &PgPool) -> Result<Vec<User>, sqlx::Error> {
+    let users = sqlx::query_as!(
+        User,
+        r#"
+        SELECT id, email, password_hash, first_name, last_name, date_of_birth, gender, contact_phone, address, created_at, last_login_at, is_active, profile_picture_url
+        FROM "User"
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(users)
 }
 
 
