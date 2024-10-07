@@ -1,0 +1,46 @@
+### 1. Create User
+POST http://127.0.0.1:8081/create_user
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password_hash": "hashedpassword",
+  "first_name": "John",
+  "last_name": "Doe",
+  "date_of_birth": "1990-01-01",
+  "gender": "Male",
+  "contact_phone": "1234567890",
+  "address": "123 Street"
+}
+
+
+### 2. **Fetch All Users**
+# Get All Users
+GET http://127.0.0.1:8081/users
+
+
+### 3. **Fetch a User by ID**
+# You can replace `{id}` with the actual user ID when running the tests.
+GET http://127.0.0.1:8081/user/2a956d58-8639-4df8-9f4c-bcd46e07c7dc
+
+
+### 4. **Fetch a User by Email**
+### Get User by Email
+GET http://127.0.0.1:8081/user/email/john@example.com
+
+
+### 5. **Update a User by ID**
+# Replace `{id}` with the actual user ID.
+PUT http://127.0.0.1:8081/user/2a956d58-8639-4df8-9f4c-bcd46e07c7dc
+Content-Type: application/json
+
+{
+  "first_name": "John Updated",
+  "last_name": "Doe Updated",
+  "contact_phone": "9876543210",
+  "address": "456 Updated Street"
+}
+
+### 6. **Delete a User by ID**
+# Replace `{id}` with the actual user ID.
+DELETE http://127.0.0.1:8081/user/2a956d58-8639-4df8-9f4c-bcd46e07c7dc

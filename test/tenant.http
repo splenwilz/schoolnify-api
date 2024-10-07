@@ -1,0 +1,66 @@
+### Add Tenant
+POST http://127.0.0.1:8081/create_tenant
+Content-Type: application/json
+
+{
+    "name": "The Godswill William",
+    "domain": "school2w.tasknify.com",
+    "address": "123 School Street",
+    "contact_email": "admin@testschool.com",
+    "contact_phone": "123-456-7890",
+    "logo_url": null,
+    "timezone": "UTC"
+}
+
+### Get All Tenants
+GET http://127.0.0.1:8081/tenants
+
+### Get Tenant by ID
+# To test this endpoint, use the id of an existing tenant (for example, from the response of GET /tenants).
+GET http://127.0.0.1:8081/tenant/78bfbc9a-eae4-4012-b40b-039e9c8fa12d
+
+
+### Get Tenant by Name
+#Replace {name} with the actual tenant name (The Godswill William). The expected response will return the tenant details in JSON format:
+GET http://127.0.0.1:8081/tenant/name/Godswill William
+
+
+### Get Tenant by Domain
+#Replace {domain} with school2w.tasknify.com. The expected response should return the tenant details in JSON format:
+GET http://127.0.0.1:8081/tenant/domain/school.tasknify.com
+
+
+### Update Tenant
+# Replace {id} with the actual tenant ID. The expected response:
+PUT http://127.0.0.1:8081/tenant/78bfbc9a-eae4-4012-b40b-039e9c8fa12d
+Content-Type: application/json
+
+{
+    "name": "The Godswill William Updated",
+    "domain": "school2w-updated.tasknify.com",
+    "address": "456 School Avenue",
+    "contact_email": "admin-updated@testschool.com",
+    "contact_phone": "987-654-3210",
+    "logo_url": "https://example.com/logo.png",
+    "timezone": "UTC+2"
+}
+
+
+### Delete Tenant by ID
+# Replace {id} with the actual tenant ID. The expected response:
+DELETE http://127.0.0.1:8081/tenant/33c636fc-cf0b-40f3-97a3-71a69d3f40fc
+
+
+### Delete Tenant by Name
+# Replace {name} with The Godswill William. The expected response:
+DELETE http://127.0.0.1:8081/tenant/name/Test School 3
+
+
+### Delete Tenant by Domain
+# Replace {domain} with school2w.tasknify.com. The expected response:
+DELETE http://127.0.0.1:8081/tenant/domain/school2.tasknify.com
+
+
+
+
+
