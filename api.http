@@ -1,0 +1,13 @@
+##
+POST http://127.0.0.1:8081/create_tenant HTTP/1.1
+content-type: application/json
+
+{
+    "name": "Godswill William",
+    "domain": "school.tasknify.com",
+    "address": "123 School Street",
+    "contact_email": "admin@testschool.com",
+    "contact_phone": "123-456-7890",
+    "logo_url": null,
+    "timezone": "UTC"
+}
