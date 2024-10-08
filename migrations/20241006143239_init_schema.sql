@@ -49,6 +49,19 @@ CREATE TABLE Permission (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Add Refresh Tokens Table
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES "User" (id) ON DELETE CASCADE
+);
+
+
 -- Table: Role_Permission
 CREATE TABLE Role_Permission (
     role_id UUID NOT NULL,

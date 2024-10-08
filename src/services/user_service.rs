@@ -2,11 +2,17 @@ use sqlx::PgPool;
 use crate::models::user::User;
 use chrono::NaiveDate;
 use uuid::Uuid;
+use bcrypt::{DEFAULT_COST, BcryptError};
+
+// Function to hash the password (if not yet available in your code)
+pub fn hash_password(plain_password: &str) -> Result<String, BcryptError> {
+    bcrypt::hash(plain_password, DEFAULT_COST)
+}
 
 #[derive(serde::Deserialize)]
 pub struct UserRequest {
     pub email: String,
-    pub password_hash: String,
+    pub password: String,  // Use plain-text password from request
     pub first_name: String,
     pub last_name: String,
     pub date_of_birth: Option<String>,
@@ -15,9 +21,12 @@ pub struct UserRequest {
     pub address: Option<String>,
 }
 
-// Function to create a new user
-pub async fn create_user(pool: &PgPool, request: &UserRequest) -> Result<uuid::Uuid, sqlx::Error> {
-    let new_user_id = uuid::Uuid::new_v4();
+// Function to create a new user with hashed password
+pub async fn create_user(pool: &PgPool, request: &UserRequest) -> Result<Uuid, sqlx::Error> {
+    let new_user_id = Uuid::new_v4();
+
+    // Hash the plain-text password before storing
+    let password_hash = hash_password(&request.password).expect("Failed to hash password");
 
     sqlx::query!(
         r#"
@@ -26,10 +35,10 @@ pub async fn create_user(pool: &PgPool, request: &UserRequest) -> Result<uuid::U
         "#,
         new_user_id,
         request.email,
-        request.password_hash,
+        password_hash,  // Store the hashed password
         request.first_name,
         request.last_name,
-        request.date_of_birth.as_ref().and_then(|dob| NaiveDate::parse_from_str(dob, "%Y-%m-%d").ok()), // Convert String to NaiveDate
+        request.date_of_birth.as_ref().and_then(|dob| NaiveDate::parse_from_str(dob, "%Y-%m-%d").ok()),  // Convert String to NaiveDate
         request.gender,
         request.contact_phone,
         request.address

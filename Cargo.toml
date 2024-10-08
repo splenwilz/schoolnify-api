@@ -17,4 +17,7 @@ log = "0.4"
 dotenv = "0.15.0"
 utoipa = { version = "4.2.3" }
 utoipa-swagger-ui = { version = "7", features = ["actix-web"] }
+jsonwebtoken = "9.3.0" 
+bcrypt = "0.15.1"  
+futures = "0.3.31"    
 

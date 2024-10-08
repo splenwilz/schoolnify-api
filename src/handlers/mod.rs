@@ -1,5 +1,6 @@
 mod tenants;
-mod users;
+pub mod users;
+pub mod auth;
 
 use actix_web::web;
 
