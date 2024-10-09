@@ -12,7 +12,7 @@ pub fn hash_password(plain_password: &str) -> Result<String, BcryptError> {
 #[derive(serde::Deserialize)]
 pub struct UserRequest {
     pub email: String,
-    pub password: String,  // Use plain-text password from request
+    pub password: String,  
     pub first_name: String,
     pub last_name: String,
     pub date_of_birth: Option<String>,

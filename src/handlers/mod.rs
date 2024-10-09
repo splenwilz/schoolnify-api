@@ -1,6 +1,10 @@
 mod tenants;
 pub mod users;
 pub mod auth;
+pub mod role;
+pub mod permission;
+
+
 
 use actix_web::web;
 

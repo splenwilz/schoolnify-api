@@ -1,0 +1,16 @@
+POST http://127.0.0.1:8081/roles
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODQ4NjZ9.KewZz9aQcwGCMYijpw4WlId4T1V5YMiwDsGMaHO4SNM
+
+{
+    "name": "Facility Manager",
+    "description": "Manager responsible for facility operations"
+}
+
+### Get Roles
+ GET http://127.0.0.1:8081/roles
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODQ4NjZ9.KewZz9aQcwGCMYijpw4WlId4T1V5YMiwDsGMaHO4SNM
+
+### GET /permissions/{id} Endpoint
+GET http://127.0.0.1:8081/permissions/11111111-1111-1111-1111-111111111111
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODQ4NjZ9.KewZz9aQcwGCMYijpw4WlId4T1V5YMiwDsGMaHO4SNM

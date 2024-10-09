@@ -1,8 +1,9 @@
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use crate::middlewares::auth_middleware::AuthMiddleware;
 use crate::handlers::auth::{login_handler, refresh_token_handler, logout_handler};
-// use crate::handlers::logout_handler;
-// use crate::handlers::auth::logout_handler;
+use crate::handlers::role::{create_role_handler, get_roles_handler, update_role_handler, get_role_by_id_handler, delete_role_handler};
+use crate::handlers::permission::{create_permission_handler, get_permissions_handler, get_permission_by_id_handler, update_permission_handler, delete_permission_handler};
+
 mod middlewares;
 mod config;
 mod handlers;
@@ -30,6 +31,28 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::resource("/logout").route(web::post().to(logout_handler))  // Logout route
             )
+            // Role management routes
+            .service(
+                web::scope("/roles")
+                    // Apply AuthMiddleware to protect these routes
+                    .wrap(AuthMiddleware)
+                    .route("", web::post().to(create_role_handler))
+                    .route("", web::get().to(get_roles_handler))
+                    .route("/{id}", web::get().to(get_role_by_id_handler))
+                    .route("/{id}", web::put().to(update_role_handler))
+                    .route("/{id}", web::delete().to(delete_role_handler))
+            )
+            // Permission management routes
+            .service(
+                web::scope("/permissions")
+                    .wrap(AuthMiddleware)  // Protect these routes
+                    .route("", web::post().to(create_permission_handler))  // POST /permissions
+                    .route("", web::get().to(get_permissions_handler))    // GET /permissions
+                    .route("/{id}", web::get().to(get_permission_by_id_handler))  // GET /permissions/{id}
+                    .route("/{id}", web::put().to(update_permission_handler))      // PUT /permissions/{id}
+                    .route("/{id}", web::delete().to(delete_permission_handler))  // DELETE /permissions/{id}
+            )          
+
             // Protected routes with AuthMiddleware applied
             .service(
                 web::scope("")  // Apply AuthMiddleware to everything else

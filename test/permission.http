@@ -1,0 +1,36 @@
+### Add permissions
+POST http://127.0.0.1:8081/permissions
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODE2OTd9.PbW0F17aUNg5qoeyPzUadOzWp0Kf6jvExhcYC3-csjE
+
+{
+    "code": "view_reports",
+    "description": "Permission to view reports"
+}
+
+### Get All Permissions
+GET http://127.0.0.1:8081/permissions
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODE2OTd9.PbW0F17aUNg5qoeyPzUadOzWp0Kf6jvExhcYC3-csjE
+
+### Get Permission By Id
+GET http://127.0.0.1:8081/permissions/cccccccc-cccc-cccc-cccc-cccccccccccc
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODE2OTd9.PbW0F17aUNg5qoeyPzUadOzWp0Kf6jvExhcYC3-csjE
+
+
+### Put or Update Permission by Id
+PUT http://127.0.0.1:8081/permissions/cccccccc-cccc-cccc-cccc-cccccccccccc
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODE2OTd9.PbW0F17aUNg5qoeyPzUadOzWp0Kf6jvExhcYC3-csjE
+
+{
+    "code": "enroll_classes_updated",
+    "description": "Updated description for managing users"
+}
+
+### Delete Permision by Id
+DELETE http://127.0.0.1:8081/permissions/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NTNlNDNiZS1iMjZlLTQ4NTMtOGY1OS0xM2JhNzU3N2E1NWEiLCJleHAiOjE3Mjg0ODE2OTd9.PbW0F17aUNg5qoeyPzUadOzWp0Kf6jvExhcYC3-csjE
+
+
+
+
