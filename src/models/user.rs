@@ -16,6 +16,7 @@ pub struct User {
     pub profile_picture_url: Option<String>,
     pub workos_metadata: serde_json::Value,
     pub last_sign_in_at: Option<DateTime<Utc>>,
+    pub org_id: Option<Uuid>,
     pub role: String,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
@@ -33,6 +34,9 @@ pub struct UserResponse {
     pub last_name: Option<String>,
     pub email_verified: bool,
     pub profile_picture_url: Option<String>,
+    /// Organization (school) this user belongs to
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization_id: Option<Uuid>,
     /// User role (e.g. "user", "admin", "teacher")
     pub role: String,
     pub created_at: DateTime<Utc>,
@@ -47,6 +51,7 @@ impl From<User> for UserResponse {
             last_name: u.last_name,
             email_verified: u.email_verified,
             profile_picture_url: u.profile_picture_url,
+            organization_id: u.org_id,
             role: u.role,
             created_at: u.created_at,
         }

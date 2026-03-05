@@ -75,6 +75,26 @@ impl UserService {
         Ok(user)
     }
 
+    /// Set the organization for a user.
+    pub async fn set_user_org(&self, user_id: Uuid, org_id: Uuid) -> Result<(), AppError> {
+        sqlx::query("UPDATE users SET org_id = $2 WHERE id = $1")
+            .bind(user_id)
+            .bind(org_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Set the role for a user.
+    pub async fn set_user_role(&self, user_id: Uuid, role: &str) -> Result<(), AppError> {
+        sqlx::query("UPDATE users SET role = $2 WHERE id = $1")
+            .bind(user_id)
+            .bind(role)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Store a hashed refresh token for a user.
     pub async fn store_refresh_token(
         &self,

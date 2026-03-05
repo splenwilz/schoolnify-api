@@ -8,10 +8,12 @@ use axum_extra::extract::CookieJar;
 
 use crate::errors::AppError;
 use crate::models::auth::{
-    AuthResponse, AuthorizeRequest, AuthorizeUrlResponse, CurrentUser, ErrorResponse, LoginRequest,
-    MessageResponse, OAuthCallbackParams, SignupRequest, SignupResponse, VerifyEmailRequest,
-    WorkOsAuthResponse,
+    AdminSignupPendingResponse, AdminSignupRequest, AdminSignupResponse, AuthResponse,
+    AuthorizeRequest, AuthorizeUrlResponse, CreateOrganizationRequest, CurrentUser, ErrorResponse,
+    LoginRequest, MessageResponse, OAuthCallbackParams, SignupRequest, SignupResponse,
+    VerifyEmailRequest, WorkOsAuthResponse,
 };
+use crate::models::organization::OrganizationResponse;
 use crate::models::user::UserResponse;
 use crate::state::AppState;
 
@@ -394,6 +396,249 @@ pub async fn callback(
         jar,
         [(axum::http::header::LOCATION, redirect_url)],
     ))
+}
+
+/// Register as a school admin
+///
+/// Creates a new user and school organization. The user becomes the admin of the school.
+/// If email verification is required, returns a pending token — call `/verify-email` first,
+/// then `POST /api/v1/organizations` to complete school setup.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/admin-signup",
+    tag = "Auth",
+    request_body = AdminSignupRequest,
+    responses(
+        (status = 201, description = "Admin account and school created", body = AdminSignupResponse),
+        (status = 202, description = "Email verification required before school creation", body = AdminSignupPendingResponse),
+        (status = 409, description = "Email already exists", body = ErrorResponse),
+        (status = 502, description = "WorkOS service error", body = ErrorResponse),
+    )
+)]
+pub async fn admin_signup(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(payload): Json<AdminSignupRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Step 1: Create user in WorkOS
+    state
+        .workos_service
+        .create_user(
+            &payload.email,
+            &payload.password,
+            payload.first_name.as_deref(),
+            payload.last_name.as_deref(),
+        )
+        .await?;
+
+    // Step 2: Authenticate
+    let auth_result = state
+        .workos_service
+        .authenticate_with_password(&payload.email, &payload.password)
+        .await?;
+
+    match auth_result {
+        Ok(auth_response) => {
+            // Step 3: Upsert local user
+            let user = state
+                .user_service
+                .upsert_from_workos(&auth_response.user)
+                .await?;
+
+            state
+                .user_service
+                .store_refresh_token(
+                    user.id,
+                    &auth_response.refresh_token,
+                    state.config.auth.refresh_token_expiry_days,
+                )
+                .await?;
+
+            // Step 4-8: Create org and assign admin role
+            let org = setup_organization(
+                &state,
+                &auth_response.user.id,
+                user.id,
+                &payload.school_name,
+            )
+            .await?;
+
+            // Step 9: Refresh token with org context to get org_id in JWT
+            let new_tokens = state
+                .workos_service
+                .refresh_access_token_with_org(
+                    &auth_response.refresh_token,
+                    &org.workos_org_id,
+                )
+                .await?;
+
+            // Step 10: Rotate refresh token
+            state
+                .user_service
+                .rotate_refresh_token(
+                    &auth_response.refresh_token,
+                    &new_tokens.refresh_token,
+                    state.config.auth.refresh_token_expiry_days,
+                )
+                .await?;
+
+            // Step 11: Set cookies and respond
+            let jar = set_auth_cookies(
+                jar,
+                &state,
+                &new_tokens.access_token,
+                &new_tokens.refresh_token,
+            );
+
+            let expose = state.config.auth.expose_token_in_response;
+            let response = AdminSignupResponse {
+                user: crate::models::user::UserResponse::from(
+                    state.user_service.find_by_id(user.id).await?.unwrap(),
+                ),
+                organization: OrganizationResponse::from(org),
+                message: "School admin account created successfully".into(),
+                access_token: if expose {
+                    Some(new_tokens.access_token)
+                } else {
+                    None
+                },
+            };
+
+            Ok((StatusCode::CREATED, jar, Json(response)).into_response())
+        }
+        Err(email_verification) => {
+            let response = AdminSignupPendingResponse {
+                message: "Account created. Verify your email, then complete school setup.".into(),
+                pending_authentication_token: email_verification.pending_authentication_token,
+                school_name: payload.school_name,
+            };
+
+            Ok((StatusCode::ACCEPTED, Json(response)).into_response())
+        }
+    }
+}
+
+/// Create a school organization
+///
+/// Creates a new school organization for the authenticated user.
+/// Used after email verification in the admin signup flow.
+/// The user must not already belong to an organization.
+#[utoipa::path(
+    post,
+    path = "/api/v1/organizations",
+    tag = "Auth",
+    security(("session_cookie" = []), ("bearer_token" = [])),
+    request_body = CreateOrganizationRequest,
+    responses(
+        (status = 201, description = "School organization created", body = AdminSignupResponse),
+        (status = 409, description = "User already belongs to an organization", body = ErrorResponse),
+        (status = 502, description = "WorkOS service error", body = ErrorResponse),
+    )
+)]
+pub async fn create_organization(
+    Extension(current_user): Extension<CurrentUser>,
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(payload): Json<CreateOrganizationRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = state
+        .user_service
+        .find_by_workos_id(&current_user.workos_user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+    if user.org_id.is_some() {
+        return Err(AppError::Conflict(
+            "User already belongs to an organization".into(),
+        ));
+    }
+
+    // Create org and assign admin
+    let org = setup_organization(
+        &state,
+        &current_user.workos_user_id,
+        user.id,
+        &payload.school_name,
+    )
+    .await?;
+
+    // Refresh token with org context
+    let refresh_cookie = jar
+        .get(&state.config.auth.refresh_cookie_name)
+        .ok_or_else(|| AppError::Unauthorized("No refresh token provided".into()))?;
+    let raw_refresh = refresh_cookie.value().to_string();
+
+    let new_tokens = state
+        .workos_service
+        .refresh_access_token_with_org(&raw_refresh, &org.workos_org_id)
+        .await?;
+
+    state
+        .user_service
+        .rotate_refresh_token(
+            &raw_refresh,
+            &new_tokens.refresh_token,
+            state.config.auth.refresh_token_expiry_days,
+        )
+        .await?;
+
+    let jar = set_auth_cookies(
+        jar,
+        &state,
+        &new_tokens.access_token,
+        &new_tokens.refresh_token,
+    );
+
+    let expose = state.config.auth.expose_token_in_response;
+    let response = AdminSignupResponse {
+        user: crate::models::user::UserResponse::from(
+            state.user_service.find_by_id(user.id).await?.unwrap(),
+        ),
+        organization: OrganizationResponse::from(org),
+        message: "School organization created successfully".into(),
+        access_token: if expose {
+            Some(new_tokens.access_token)
+        } else {
+            None
+        },
+    };
+
+    Ok((StatusCode::CREATED, jar, Json(response)))
+}
+
+/// Shared logic: create org in WorkOS + local DB, create membership, link user.
+async fn setup_organization(
+    state: &AppState,
+    workos_user_id: &str,
+    local_user_id: uuid::Uuid,
+    school_name: &str,
+) -> Result<crate::models::organization::Organization, AppError> {
+    use crate::services::organization::OrganizationService;
+
+    // Create org in WorkOS
+    let workos_org = state
+        .workos_service
+        .create_organization(school_name, None)
+        .await?;
+
+    // Create local org
+    let slug = OrganizationService::generate_slug(school_name);
+    let org = state
+        .organization_service
+        .create(&workos_org.id, school_name, &slug, None)
+        .await?;
+
+    // Create membership in WorkOS (admin role)
+    state
+        .workos_service
+        .create_organization_membership(workos_user_id, &workos_org.id, "admin")
+        .await?;
+
+    // Link user to org locally and set role
+    state.user_service.set_user_org(local_user_id, org.id).await?;
+    state.user_service.set_user_role(local_user_id, "admin").await?;
+
+    Ok(org)
 }
 
 /// Upserts the user, stores the refresh token, and sets auth cookies.

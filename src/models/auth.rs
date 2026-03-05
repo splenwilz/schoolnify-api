@@ -130,6 +130,77 @@ pub struct OAuthCallbackParams {
     pub state: Option<String>,
 }
 
+/// Request body for school admin signup.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminSignupRequest {
+    /// Admin's email address
+    #[schema(example = "admin@springfield-high.edu")]
+    pub email: String,
+    /// Password (min 8 characters)
+    #[schema(example = "SecurePass123!")]
+    pub password: String,
+    #[schema(example = "Jane")]
+    pub first_name: Option<String>,
+    #[schema(example = "Smith")]
+    pub last_name: Option<String>,
+    /// Name of the school to create
+    #[schema(example = "Springfield High School")]
+    pub school_name: String,
+}
+
+/// Response returned after successful admin signup.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminSignupResponse {
+    pub user: crate::models::user::UserResponse,
+    pub organization: crate::models::organization::OrganizationResponse,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
+}
+
+/// Response from admin signup when email verification is required.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminSignupPendingResponse {
+    pub message: String,
+    pub pending_authentication_token: String,
+    pub school_name: String,
+}
+
+/// Request body for creating an organization (post-verification).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateOrganizationRequest {
+    /// Name of the school to create
+    #[schema(example = "Springfield High School")]
+    pub school_name: String,
+}
+
+// -- WorkOS Organization API types --
+
+/// Response from WorkOS create organization endpoint.
+#[derive(Debug, Deserialize)]
+pub struct WorkOsCreateOrgResponse {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Response from WorkOS create organization membership endpoint.
+#[derive(Debug, Deserialize)]
+pub struct WorkOsCreateMembershipResponse {
+    pub id: String,
+    pub user_id: String,
+    pub organization_id: String,
+    pub role: WorkOsRole,
+    pub status: String,
+}
+
+/// WorkOS role within an organization membership.
+#[derive(Debug, Deserialize)]
+pub struct WorkOsRole {
+    pub slug: String,
+}
+
 /// Request body for user login.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct LoginRequest {

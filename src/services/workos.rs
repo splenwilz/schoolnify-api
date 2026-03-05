@@ -8,7 +8,8 @@ use tokio::sync::RwLock;
 use crate::config::WorkOsConfig;
 use crate::errors::AppError;
 use crate::models::auth::{
-    WorkOsAuthResponse, WorkOsCreateUserResponse, WorkOsEmailVerificationRequired,
+    WorkOsAuthResponse, WorkOsCreateMembershipResponse, WorkOsCreateOrgResponse,
+    WorkOsCreateUserResponse, WorkOsEmailVerificationRequired,
 };
 
 const JWKS_CACHE_TTL: Duration = Duration::from_secs(3600);
@@ -249,6 +250,136 @@ impl WorkOsService {
             }
             return Err(AppError::ExternalService(format!(
                 "WorkOS token refresh failed ({status}): {error_body}"
+            )));
+        }
+
+        response
+            .json::<WorkOsAuthResponse>()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("Failed to parse WorkOS response: {e}")))
+    }
+
+    /// Create an organization in WorkOS.
+    pub async fn create_organization(
+        &self,
+        name: &str,
+        domain: Option<&str>,
+    ) -> Result<WorkOsCreateOrgResponse, AppError> {
+        let mut body = serde_json::json!({ "name": name });
+
+        if let Some(d) = domain {
+            body["domain_data"] = serde_json::json!([{ "domain": d, "state": "pending" }]);
+        }
+
+        let response = self
+            .client
+            .post(format!("{}/organizations", self.config.api_base_url))
+            .bearer_auth(&self.config.api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS create organization failed");
+
+            if status.as_u16() == 409 {
+                return Err(AppError::Conflict("An organization with this name already exists".into()));
+            }
+            return Err(AppError::ExternalService(format!(
+                "WorkOS create organization failed ({status})"
+            )));
+        }
+
+        response
+            .json::<WorkOsCreateOrgResponse>()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("Failed to parse WorkOS response: {e}")))
+    }
+
+    /// Create an organization membership in WorkOS (assign user to org).
+    pub async fn create_organization_membership(
+        &self,
+        user_id: &str,
+        organization_id: &str,
+        role_slug: &str,
+    ) -> Result<WorkOsCreateMembershipResponse, AppError> {
+        let body = serde_json::json!({
+            "user_id": user_id,
+            "organization_id": organization_id,
+            "role_slug": role_slug,
+        });
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/user_management/organization_memberships",
+                self.config.api_base_url
+            ))
+            .bearer_auth(&self.config.api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS create membership failed");
+
+            return Err(AppError::ExternalService(format!(
+                "WorkOS create membership failed ({status})"
+            )));
+        }
+
+        response
+            .json::<WorkOsCreateMembershipResponse>()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("Failed to parse WorkOS response: {e}")))
+    }
+
+    /// Refresh an access token with an explicit organization context.
+    /// Used after creating a membership to get `org_id` in the JWT.
+    pub async fn refresh_access_token_with_org(
+        &self,
+        refresh_token: &str,
+        organization_id: &str,
+    ) -> Result<WorkOsAuthResponse, AppError> {
+        let body = serde_json::json!({
+            "client_id": self.config.client_id,
+            "client_secret": self.config.client_secret,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "organization_id": organization_id,
+        });
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/user_management/authenticate",
+                self.config.api_base_url
+            ))
+            .bearer_auth(&self.config.api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS refresh failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS org token refresh failed");
+
+            if status.as_u16() == 401 || status.as_u16() == 400 {
+                return Err(AppError::Unauthorized(
+                    extract_workos_message(&error_body)
+                        .unwrap_or_else(|| "Failed to refresh token with org".into()),
+                ));
+            }
+            return Err(AppError::ExternalService(format!(
+                "WorkOS org token refresh failed ({status})"
             )));
         }
 

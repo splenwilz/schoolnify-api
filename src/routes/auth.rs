@@ -13,7 +13,8 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/logout", post(auth::logout))
         .route("/refresh", post(auth::refresh))
         .route("/authorize", get(auth::authorize))
-        .route("/callback", get(auth::callback));
+        .route("/callback", get(auth::callback))
+        .route("/admin-signup", post(auth::admin_signup));
 
     let protected = Router::new()
         .route("/me", get(auth::me))
