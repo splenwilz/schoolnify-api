@@ -74,7 +74,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, body = %error_body, "WorkOS create user failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS create user failed");
 
             if status.as_u16() == 409
                 || error_body.contains("email_not_available")
@@ -141,7 +141,7 @@ impl WorkOsService {
                 return Ok(Err(ev));
             }
 
-            tracing::error!(status = %status, body = %error_body, "WorkOS authentication failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS authentication failed");
 
             if status.as_u16() == 401 {
                 return Err(AppError::Unauthorized(
@@ -193,7 +193,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, body = %error_body, "WorkOS email verification failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS email verification failed");
 
             if status.as_u16() == 400 || status.as_u16() == 401 || status.as_u16() == 403 {
                 return Err(AppError::BadRequest(
@@ -239,7 +239,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, body = %error_body, "WorkOS token refresh failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS token refresh failed");
 
             if status.as_u16() == 401 || status.as_u16() == 400 {
                 return Err(AppError::Unauthorized(
@@ -322,7 +322,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, body = %error_body, "WorkOS code exchange failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS code exchange failed");
 
             if status.as_u16() == 400 || status.as_u16() == 401 {
                 return Err(AppError::BadRequest(
@@ -392,6 +392,20 @@ impl WorkOsService {
         result
     }
 
+    /// Force a fresh JWKS fetch, bypassing the cache TTL.
+    /// Used when a JWT has a `kid` not found in the current cache (key rotation).
+    pub async fn get_jwks_force_refresh(&self) -> Result<JwkSet, AppError> {
+        let jwks_url = self.config.jwks_url();
+        tracing::debug!(url = %jwks_url, "Force-refreshing JWKS from WorkOS");
+
+        let result = self.fetch_jwks(&jwks_url).await?;
+
+        let mut cache = self.jwks_cache.write().await;
+        cache.data = Some((result.clone(), Instant::now()));
+
+        Ok(result)
+    }
+
     async fn fetch_jwks(&self, url: &str) -> Result<JwkSet, AppError> {
         let response = self
             .client
@@ -419,4 +433,11 @@ fn extract_workos_message(body: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(body)
         .ok()
         .and_then(|v| v.get("message")?.as_str().map(String::from))
+}
+
+/// Extract the top-level "code" field from a WorkOS error JSON body (PII-safe for logging).
+fn extract_workos_code(body: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("code")?.as_str().map(String::from))
 }

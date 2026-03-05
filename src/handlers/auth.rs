@@ -181,9 +181,19 @@ pub async fn logout(
             .await?;
     }
 
-    let jar = jar
-        .remove(Cookie::from(state.config.auth.session_cookie_name.clone()))
-        .remove(Cookie::from(state.config.auth.refresh_cookie_name.clone()));
+    let mut session_removal = Cookie::new(state.config.auth.session_cookie_name.clone(), "");
+    session_removal.set_path("/");
+    if !state.config.auth.cookie_domain.is_empty() {
+        session_removal.set_domain(state.config.auth.cookie_domain.clone());
+    }
+
+    let mut refresh_removal = Cookie::new(state.config.auth.refresh_cookie_name.clone(), "");
+    refresh_removal.set_path("/api/v1/auth/refresh");
+    if !state.config.auth.cookie_domain.is_empty() {
+        refresh_removal.set_domain(state.config.auth.cookie_domain.clone());
+    }
+
+    let jar = jar.remove(session_removal).remove(refresh_removal);
 
     Ok((
         StatusCode::OK,
@@ -307,16 +317,28 @@ pub async fn refresh(
 )]
 pub async fn authorize(
     State(state): State<AppState>,
+    jar: CookieJar,
     axum::extract::Query(params): axum::extract::Query<AuthorizeRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let nonce = uuid::Uuid::new_v4().to_string();
+
     let authorization_url = state.workos_service.get_authorization_url(
         params.provider.as_deref(),
         params.connection_id.as_deref(),
         params.organization_id.as_deref(),
-        None,
+        Some(&nonce),
     )?;
 
-    Ok(Json(AuthorizeUrlResponse { authorization_url }))
+    let mut nonce_cookie = Cookie::new("oauth_state", nonce);
+    nonce_cookie.set_http_only(true);
+    nonce_cookie.set_secure(state.config.auth.cookie_secure);
+    nonce_cookie.set_same_site(SameSite::Lax);
+    nonce_cookie.set_path("/api/v1/auth/callback");
+    nonce_cookie.set_max_age(time::Duration::minutes(10));
+
+    let jar = jar.add(nonce_cookie);
+
+    Ok((jar, Json(AuthorizeUrlResponse { authorization_url })))
 }
 
 /// OAuth callback
@@ -343,12 +365,27 @@ pub async fn callback(
     jar: CookieJar,
     axum::extract::Query(params): axum::extract::Query<OAuthCallbackParams>,
 ) -> Result<impl IntoResponse, AppError> {
+    // Validate CSRF state parameter
+    let expected_state = jar
+        .get("oauth_state")
+        .ok_or_else(|| AppError::BadRequest("Missing OAuth state cookie".into()))?;
+
+    match &params.state {
+        Some(state_param) if state_param == expected_state.value() => {}
+        _ => return Err(AppError::BadRequest("Invalid OAuth state parameter".into())),
+    }
+
     let auth_response = state
         .workos_service
         .authenticate_with_code(&params.code)
         .await?;
 
     let (jar, _user) = complete_authentication(&state, jar, &auth_response).await?;
+
+    // Clear the nonce cookie
+    let mut nonce_removal = Cookie::new("oauth_state", "");
+    nonce_removal.set_path("/api/v1/auth/callback");
+    let jar = jar.remove(nonce_removal);
 
     let redirect_url = state.config.auth.post_login_redirect_url.clone();
 

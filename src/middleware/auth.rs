@@ -27,13 +27,21 @@ pub async fn require_auth(
 
     let jwks = state.workos_service.get_jwks().await?;
 
-    let jwk = jwks
-        .keys
-        .iter()
-        .find(|k| k.common.key_id.as_deref() == Some(&kid))
-        .ok_or_else(|| AppError::Unauthorized("Unknown signing key".into()))?;
+    let jwk = match jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(&kid)) {
+        Some(k) => k.clone(),
+        None => {
+            // Key not found — WorkOS may have rotated keys. Force a fresh fetch and retry once.
+            tracing::info!(kid = %kid, "JWK kid not found in cache, forcing JWKS refresh");
+            let fresh_jwks = state.workos_service.get_jwks_force_refresh().await?;
+            fresh_jwks
+                .keys
+                .into_iter()
+                .find(|k| k.common.key_id.as_deref() == Some(&kid))
+                .ok_or_else(|| AppError::Unauthorized("Unknown signing key".into()))?
+        }
+    };
 
-    let decoding_key = DecodingKey::from_jwk(jwk)
+    let decoding_key = DecodingKey::from_jwk(&jwk)
         .map_err(|_| AppError::Unauthorized("Invalid JWK".into()))?;
 
     let mut validation = Validation::new(Algorithm::RS256);
