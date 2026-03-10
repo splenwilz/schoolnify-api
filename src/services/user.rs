@@ -95,6 +95,24 @@ impl UserService {
         Ok(())
     }
 
+    /// Delete a user and all their refresh tokens.
+    pub async fn delete_user(&self, user_id: Uuid) -> Result<(), AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM refresh_tokens WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Store a hashed refresh token for a user.
     pub async fn store_refresh_token(
         &self,
@@ -151,12 +169,27 @@ impl UserService {
     }
 
     /// Rotate: revoke old token and store new one atomically.
+    /// If WorkOS returns the same token, just update the expiry instead.
     pub async fn rotate_refresh_token(
         &self,
         old_raw: &str,
         new_raw: &str,
         expiry_days: i64,
     ) -> Result<(), AppError> {
+        // Same token returned — just extend the expiry
+        if old_raw == new_raw {
+            let token_hash = hash_token(old_raw);
+            let expires_at = Utc::now() + chrono::Duration::days(expiry_days);
+            sqlx::query(
+                "UPDATE refresh_tokens SET expires_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL",
+            )
+            .bind(&token_hash)
+            .bind(expires_at)
+            .execute(&self.pool)
+            .await?;
+            return Ok(());
+        }
+
         let mut tx = self.pool.begin().await?;
 
         let old_hash = hash_token(old_raw);

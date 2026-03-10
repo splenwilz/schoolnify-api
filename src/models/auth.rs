@@ -92,6 +92,9 @@ pub struct SignupResponse {
     pub message: String,
     /// The pending authentication token (pass this to /verify-email)
     pub pending_authentication_token: String,
+    /// WorkOS user ID — pass to `/resend-verification` if needed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
 }
 
 /// WorkOS email verification required error response (parsed internally).
@@ -156,6 +159,8 @@ pub struct AdminSignupResponse {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
+    /// Subdomain URL for the school (e.g. "https://springfield-high.schoolnify.com")
+    pub subdomain_url: String,
 }
 
 /// Response from admin signup when email verification is required.
@@ -164,6 +169,16 @@ pub struct AdminSignupPendingResponse {
     pub message: String,
     pub pending_authentication_token: String,
     pub school_name: String,
+    /// WorkOS user ID — pass to `/resend-verification` if needed
+    pub user_id: String,
+}
+
+/// Request body for resending the email verification code.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ResendVerificationRequest {
+    /// The WorkOS user ID returned from signup
+    #[schema(example = "user_01HXYZ")]
+    pub user_id: String,
 }
 
 /// Request body for creating an organization (post-verification).
@@ -172,6 +187,8 @@ pub struct CreateOrganizationRequest {
     /// Name of the school to create
     #[schema(example = "Springfield High School")]
     pub school_name: String,
+    /// Refresh token from verify-email response. Pass this directly to avoid cookie timing issues.
+    pub refresh_token: Option<String>,
 }
 
 // -- WorkOS Organization API types --
@@ -215,10 +232,13 @@ pub struct LoginRequest {
 pub struct AuthResponse {
     pub user: crate::models::user::UserResponse,
     pub message: String,
-    /// Access token (JWT). **DEV ONLY** — remove in production.
+    /// Access token (JWT). **DEV ONLY** — controlled by `expose_token_in_response`.
     /// Tokens are also set as HttpOnly cookies automatically.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
+    /// Refresh token. **DEV ONLY** — pass to `/create-organization` if needed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
 }
 
 /// Generic message response.

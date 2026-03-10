@@ -59,6 +59,8 @@ pub struct AuthConfig {
 pub struct CorsConfig {
     #[serde(deserialize_with = "deserialize_string_or_vec")]
     pub allowed_origins: Vec<String>,
+    /// Base domain for dynamic CORS subdomain matching (e.g. "schoolnify.com")
+    pub base_domain: String,
 }
 
 /// Accepts either a JSON array of strings or a comma-separated string.

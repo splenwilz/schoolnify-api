@@ -90,7 +90,7 @@ impl WorkOsService {
                 ));
             }
             return Err(AppError::ExternalService(format!(
-                "WorkOS create user failed ({status}): {error_body}"
+                "WorkOS create user failed ({status})"
             )));
         }
 
@@ -138,20 +138,22 @@ impl WorkOsService {
                 && let Ok(ev) =
                     serde_json::from_str::<WorkOsEmailVerificationRequired>(&error_body)
             {
-                tracing::info!(email = %email, "Email verification required");
+                tracing::info!("Email verification required");
                 return Ok(Err(ev));
             }
 
             tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS authentication failed");
 
-            if status.as_u16() == 401 {
+            if status.as_u16() == 401
+                || (status.as_u16() == 400
+                    && error_body.contains("invalid_credentials"))
+            {
                 return Err(AppError::Unauthorized(
-                    extract_workos_message(&error_body)
-                        .unwrap_or_else(|| "Invalid email or password".into()),
+                    "Invalid email or password".into(),
                 ));
             }
             return Err(AppError::ExternalService(format!(
-                "WorkOS authentication failed ({status}): {error_body}"
+                "WorkOS authentication failed ({status})"
             )));
         }
 
@@ -203,7 +205,7 @@ impl WorkOsService {
                 ));
             }
             return Err(AppError::ExternalService(format!(
-                "WorkOS email verification failed ({status}): {error_body}"
+                "WorkOS email verification failed ({status})"
             )));
         }
 
@@ -370,7 +372,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS org token refresh failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), error_body = %error_body, "WorkOS org token refresh failed");
 
             if status.as_u16() == 401 || status.as_u16() == 400 {
                 return Err(AppError::Unauthorized(
@@ -387,6 +389,100 @@ impl WorkOsService {
             .json::<WorkOsAuthResponse>()
             .await
             .map_err(|e| AppError::ExternalService(format!("Failed to parse WorkOS response: {e}")))
+    }
+
+    /// Delete an organization from WorkOS.
+    pub async fn delete_organization(&self, org_id: &str) -> Result<(), AppError> {
+        let response = self
+            .client
+            .delete(format!(
+                "{}/organizations/{}",
+                self.config.api_base_url, org_id
+            ))
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS delete organization failed");
+
+            if status.as_u16() == 404 {
+                // Org already gone in WorkOS — not an error
+                return Ok(());
+            }
+            return Err(AppError::ExternalService(format!(
+                "WorkOS delete organization failed ({status})"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Delete a user from WorkOS.
+    pub async fn delete_user(&self, user_id: &str) -> Result<(), AppError> {
+        let response = self
+            .client
+            .delete(format!(
+                "{}/user_management/users/{}",
+                self.config.api_base_url, user_id
+            ))
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS delete user failed");
+
+            if status.as_u16() == 404 {
+                return Err(AppError::NotFound("User not found in WorkOS".into()));
+            }
+            return Err(AppError::ExternalService(format!(
+                "WorkOS delete user failed ({status})"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Send (or resend) an email verification code to a user.
+    pub async fn send_verification_email(&self, user_id: &str) -> Result<(), AppError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/user_management/users/{}/email_verification/send",
+                self.config.api_base_url, user_id
+            ))
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await
+            .map_err(|e| AppError::ExternalService(format!("WorkOS request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS send verification email failed");
+
+            if status.as_u16() == 404 {
+                return Err(AppError::NotFound("User not found".into()));
+            }
+            if status.as_u16() == 400 {
+                return Err(AppError::BadRequest(
+                    extract_workos_message(&error_body)
+                        .unwrap_or_else(|| "Failed to send verification email".into()),
+                ));
+            }
+            return Err(AppError::ExternalService(format!(
+                "WorkOS send verification email failed ({status})"
+            )));
+        }
+
+        Ok(())
     }
 
     /// Build the WorkOS authorization URL for OAuth/SSO flows.
@@ -495,10 +591,14 @@ impl WorkOsService {
         {
             let mut cache = self.jwks_cache.write().await;
             // Double-check: another task may have refreshed while we waited for the lock
-            if let Some((keys, fetched_at)) = &cache.data
-                && fetched_at.elapsed() < JWKS_CACHE_TTL
-            {
-                return Ok(keys.clone());
+            if let Some((keys, fetched_at)) = &cache.data {
+                if fetched_at.elapsed() < JWKS_CACHE_TTL {
+                    return Ok(keys.clone());
+                }
+                // Another task is already fetching — return stale data
+                if cache.fetching {
+                    return Ok(keys.clone());
+                }
             }
             cache.fetching = true;
         }
@@ -508,7 +608,7 @@ impl WorkOsService {
 
         let result = self.fetch_jwks(&jwks_url).await;
 
-        // Update cache regardless of success/failure, clear fetching flag
+        // Update cache and clear fetching flag
         let mut cache = self.jwks_cache.write().await;
         cache.fetching = false;
         match &result {
@@ -516,7 +616,10 @@ impl WorkOsService {
                 cache.data = Some((jwk_set.clone(), Instant::now()));
             }
             Err(_) => {
-                // On fetch failure, keep stale data if available
+                // On fetch failure, return stale data if available
+                if let Some((stale_keys, _)) = &cache.data {
+                    return Ok(stale_keys.clone());
+                }
             }
         }
 

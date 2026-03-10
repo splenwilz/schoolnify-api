@@ -10,8 +10,8 @@ use crate::errors::AppError;
 use crate::models::auth::{
     AdminSignupPendingResponse, AdminSignupRequest, AdminSignupResponse, AuthResponse,
     AuthorizeRequest, AuthorizeUrlResponse, CreateOrganizationRequest, CurrentUser, ErrorResponse,
-    LoginRequest, MessageResponse, OAuthCallbackParams, SignupRequest, SignupResponse,
-    VerifyEmailRequest, WorkOsAuthResponse,
+    LoginRequest, MessageResponse, OAuthCallbackParams, ResendVerificationRequest, SignupRequest,
+    SignupResponse, VerifyEmailRequest, WorkOsAuthResponse,
 };
 use crate::models::organization::OrganizationResponse;
 use crate::models::user::UserResponse;
@@ -38,7 +38,7 @@ pub async fn signup(
     jar: CookieJar,
     Json(payload): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    state
+    let created_user = state
         .workos_service
         .create_user(
             &payload.email,
@@ -61,6 +61,7 @@ pub async fn signup(
                 user,
                 "Account created successfully",
                 &auth_response.access_token,
+                &auth_response.refresh_token,
             );
 
             Ok((StatusCode::CREATED, jar, Json(response)).into_response())
@@ -70,6 +71,7 @@ pub async fn signup(
                 message: "Account created. Please check your email for a verification code."
                     .into(),
                 pending_authentication_token: email_verification.pending_authentication_token,
+                user_id: Some(created_user.id),
             };
 
             Ok((StatusCode::CREATED, Json(response)).into_response())
@@ -108,9 +110,43 @@ pub async fn verify_email(
         user,
         "Email verified successfully",
         &auth_response.access_token,
+        &auth_response.refresh_token,
     );
 
     Ok((StatusCode::OK, jar, Json(response)))
+}
+
+/// Resend email verification code
+///
+/// Sends a new verification code to the user's email. Requires the WorkOS user ID
+/// returned from the signup response.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/resend-verification",
+    tag = "Auth",
+    request_body = ResendVerificationRequest,
+    responses(
+        (status = 200, description = "Verification email sent", body = MessageResponse),
+        (status = 400, description = "Invalid request", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse),
+        (status = 502, description = "WorkOS service error", body = ErrorResponse),
+    )
+)]
+pub async fn resend_verification(
+    State(state): State<AppState>,
+    Json(payload): Json<ResendVerificationRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .workos_service
+        .send_verification_email(&payload.user_id)
+        .await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(MessageResponse {
+            message: "Verification email sent".into(),
+        }),
+    ))
 }
 
 /// Log in with email and password
@@ -146,6 +182,7 @@ pub async fn login(
                 user,
                 "Login successful",
                 &auth_response.access_token,
+                &auth_response.refresh_token,
             );
 
             Ok((StatusCode::OK, jar, Json(response)).into_response())
@@ -154,6 +191,7 @@ pub async fn login(
             let response = SignupResponse {
                 message: "Email verification required. Please check your email for a verification code.".into(),
                 pending_authentication_token: email_verification.pending_authentication_token,
+                user_id: None,
             };
 
             Ok((StatusCode::FORBIDDEN, Json(response)).into_response())
@@ -190,7 +228,7 @@ pub async fn logout(
     }
 
     let mut refresh_removal = Cookie::new(state.config.auth.refresh_cookie_name.clone(), "");
-    refresh_removal.set_path("/api/v1/auth/refresh");
+    refresh_removal.set_path("/api/v1/auth");
     if !state.config.auth.cookie_domain.is_empty() {
         refresh_removal.set_domain(state.config.auth.cookie_domain.clone());
     }
@@ -233,6 +271,83 @@ pub async fn me(
         Some(u) => Ok(Json(UserResponse::from(u))),
         None => Err(AppError::NotFound("User not found".into())),
     }
+}
+
+/// Delete current user account
+///
+/// Permanently deletes the authenticated user's account from both WorkOS and the local database.
+/// Clears session cookies and revokes all refresh tokens.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/auth/me",
+    tag = "Auth",
+    security(("session_cookie" = []), ("bearer_token" = [])),
+    responses(
+        (status = 200, description = "Account deleted successfully", body = MessageResponse),
+        (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse),
+        (status = 502, description = "WorkOS service error", body = ErrorResponse),
+    )
+)]
+pub async fn delete_account(
+    Extension(current_user): Extension<CurrentUser>,
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> Result<impl IntoResponse, AppError> {
+    let user = state
+        .user_service
+        .find_by_workos_id(&current_user.workos_user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+    // If user is the sole admin of an org, delete the org too
+    if let Some(org_id) = user.org_id
+        && user.role == "admin"
+    {
+        let admin_count = state.organization_service.count_admins(org_id).await?;
+        if admin_count <= 1 {
+            // Last admin — delete the org from WorkOS and locally
+            if let Some(org) = state.organization_service.find_by_id(org_id).await? {
+                state
+                    .workos_service
+                    .delete_organization(&org.workos_org_id)
+                    .await?;
+            }
+            state.organization_service.delete(org_id).await?;
+        }
+    }
+
+    // Delete user from WorkOS
+    state
+        .workos_service
+        .delete_user(&current_user.workos_user_id)
+        .await?;
+
+    // Delete locally (user + refresh tokens)
+    state.user_service.delete_user(user.id).await?;
+
+    // Clear cookies
+    let mut session_removal = Cookie::new(state.config.auth.session_cookie_name.clone(), "");
+    session_removal.set_path("/");
+    if !state.config.auth.cookie_domain.is_empty() {
+        session_removal.set_domain(state.config.auth.cookie_domain.clone());
+    }
+
+    let mut refresh_removal = Cookie::new(state.config.auth.refresh_cookie_name.clone(), "");
+    refresh_removal.set_path("/api/v1/auth");
+    if !state.config.auth.cookie_domain.is_empty() {
+        refresh_removal.set_domain(state.config.auth.cookie_domain.clone());
+    }
+
+    let jar = jar.remove(session_removal).remove(refresh_removal);
+
+    Ok((
+        StatusCode::OK,
+        jar,
+        Json(MessageResponse {
+            message: "Account deleted successfully".into(),
+        }),
+    ))
 }
 
 /// Refresh access token
@@ -421,7 +536,7 @@ pub async fn admin_signup(
     Json(payload): Json<AdminSignupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     // Step 1: Create user in WorkOS
-    state
+    let created_user = state
         .workos_service
         .create_user(
             &payload.email,
@@ -491,9 +606,11 @@ pub async fn admin_signup(
             );
 
             let expose = state.config.auth.expose_token_in_response;
+            let subdomain_url = build_subdomain_url(&state, &org.slug);
             let response = AdminSignupResponse {
                 user: crate::models::user::UserResponse::from(
-                    state.user_service.find_by_id(user.id).await?.unwrap(),
+                    state.user_service.find_by_id(user.id).await?
+                        .ok_or_else(|| AppError::Internal("User not found after upsert".into()))?,
                 ),
                 organization: OrganizationResponse::from(org),
                 message: "School admin account created successfully".into(),
@@ -502,6 +619,7 @@ pub async fn admin_signup(
                 } else {
                     None
                 },
+                subdomain_url,
             };
 
             Ok((StatusCode::CREATED, jar, Json(response)).into_response())
@@ -511,6 +629,7 @@ pub async fn admin_signup(
                 message: "Account created. Verify your email, then complete school setup.".into(),
                 pending_authentication_token: email_verification.pending_authentication_token,
                 school_name: payload.school_name,
+                user_id: created_user.id,
             };
 
             Ok((StatusCode::ACCEPTED, Json(response)).into_response())
@@ -525,7 +644,7 @@ pub async fn admin_signup(
 /// The user must not already belong to an organization.
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations",
+    path = "/api/v1/auth/create-organization",
     tag = "Auth",
     security(("session_cookie" = []), ("bearer_token" = [])),
     request_body = CreateOrganizationRequest,
@@ -562,11 +681,16 @@ pub async fn create_organization(
     )
     .await?;
 
-    // Refresh token with org context
-    let refresh_cookie = jar
-        .get(&state.config.auth.refresh_cookie_name)
-        .ok_or_else(|| AppError::Unauthorized("No refresh token provided".into()))?;
-    let raw_refresh = refresh_cookie.value().to_string();
+    // Prefer refresh_token from request body (avoids cookie timing issues),
+    // fall back to cookie.
+    let raw_refresh = if let Some(token) = payload.refresh_token {
+        token
+    } else {
+        jar.get(&state.config.auth.refresh_cookie_name)
+            .ok_or_else(|| AppError::Unauthorized("No refresh token provided".into()))?
+            .value()
+            .to_string()
+    };
 
     let new_tokens = state
         .workos_service
@@ -590,9 +714,11 @@ pub async fn create_organization(
     );
 
     let expose = state.config.auth.expose_token_in_response;
+    let subdomain_url = build_subdomain_url(&state, &org.slug);
     let response = AdminSignupResponse {
         user: crate::models::user::UserResponse::from(
-            state.user_service.find_by_id(user.id).await?.unwrap(),
+            state.user_service.find_by_id(user.id).await?
+                        .ok_or_else(|| AppError::Internal("User not found after upsert".into()))?,
         ),
         organization: OrganizationResponse::from(org),
         message: "School organization created successfully".into(),
@@ -601,6 +727,7 @@ pub async fn create_organization(
         } else {
             None
         },
+        subdomain_url,
     };
 
     Ok((StatusCode::CREATED, jar, Json(response)))
@@ -678,6 +805,7 @@ fn build_auth_response(
     user: crate::models::user::User,
     message: &str,
     access_token: &str,
+    refresh_token: &str,
 ) -> AuthResponse {
     let expose = state.config.auth.expose_token_in_response;
 
@@ -687,6 +815,11 @@ fn build_auth_response(
         // Controlled by auth.expose_token_in_response config — set to false in production
         access_token: if expose {
             Some(access_token.to_string())
+        } else {
+            None
+        },
+        refresh_token: if expose {
+            Some(refresh_token.to_string())
         } else {
             None
         },
@@ -722,8 +855,8 @@ fn set_auth_cookies(
         Cookie::new(state.config.auth.refresh_cookie_name.clone(), refresh_token.to_string());
     refresh_cookie.set_http_only(true);
     refresh_cookie.set_secure(state.config.auth.cookie_secure);
-    refresh_cookie.set_same_site(SameSite::Strict);
-    refresh_cookie.set_path("/api/v1/auth/refresh");
+    refresh_cookie.set_same_site(same_site);
+    refresh_cookie.set_path("/api/v1/auth");
     refresh_cookie.set_max_age(time::Duration::days(
         state.config.auth.refresh_token_expiry_days,
     ));
@@ -731,5 +864,25 @@ fn set_auth_cookies(
         refresh_cookie.set_domain(state.config.auth.cookie_domain.clone());
     }
 
+    tracing::debug!(
+        session_name = %session_cookie.name(),
+        session_path = ?session_cookie.path(),
+        session_domain = ?session_cookie.domain(),
+        session_secure = ?session_cookie.secure(),
+        session_same_site = ?session_cookie.same_site(),
+        session_http_only = ?session_cookie.http_only(),
+        "Setting auth cookies"
+    );
+
     jar.add(session_cookie).add(refresh_cookie)
+}
+
+/// Build the subdomain URL for a school based on its slug and the configured base domain.
+fn build_subdomain_url(state: &AppState, slug: &str) -> String {
+    let base_domain = &state.config.cors.base_domain;
+    if base_domain == "localhost" {
+        format!("http://{slug}.localhost:3001")
+    } else {
+        format!("https://{slug}.{base_domain}")
+    }
 }

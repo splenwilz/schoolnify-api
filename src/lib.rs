@@ -14,11 +14,11 @@ use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method, StatusCode};
 use axum::Router;
 use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -36,9 +36,11 @@ use crate::state::AppState;
         handlers::health::check,
         handlers::auth::signup,
         handlers::auth::verify_email,
+        handlers::auth::resend_verification,
         handlers::auth::login,
         handlers::auth::logout,
         handlers::auth::me,
+        handlers::auth::delete_account,
         handlers::auth::refresh,
         handlers::auth::authorize,
         handlers::auth::callback,
@@ -52,6 +54,7 @@ use crate::state::AppState;
         models::auth::LoginRequest,
         models::auth::AuthResponse,
         models::auth::SignupResponse,
+        models::auth::ResendVerificationRequest,
         models::auth::AdminSignupRequest,
         models::auth::AdminSignupResponse,
         models::auth::AdminSignupPendingResponse,
@@ -89,12 +92,12 @@ impl Modify for SecurityAddon {
             );
             components.add_security_scheme(
                 "session_cookie",
-                SecurityScheme::Http(
-                    HttpBuilder::new()
-                        .scheme(HttpAuthScheme::Bearer)
-                        .description(Some("Session token via HttpOnly cookie (set automatically on login)"))
-                        .build(),
-                ),
+                SecurityScheme::ApiKey(ApiKey::Cookie(
+                    ApiKeyValue::with_description(
+                        "session_token",
+                        "HttpOnly session cookie (set automatically on login)",
+                    ),
+                )),
             );
         }
     }
@@ -118,16 +121,51 @@ pub fn build_router(state: AppState) -> Router {
 }
 
 fn build_cors_layer(state: &AppState) -> CorsLayer {
-    let origins: Vec<HeaderValue> = state
+    let base_domain = state.config.cors.base_domain.clone();
+    let static_origins: Vec<HeaderValue> = state
         .config
         .cors
         .allowed_origins
         .iter()
-        .filter_map(|o| o.parse().ok())
+        .filter_map(|o| match o.parse() {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!(origin = %o, error = %e, "Ignoring invalid CORS origin");
+                None
+            }
+        })
         .collect();
 
+    let allow_origin = AllowOrigin::predicate(move |origin, _parts| {
+        // 1. Check static allowlist (localhost dev origins)
+        if static_origins.iter().any(|allowed| allowed == origin) {
+            return true;
+        }
+
+        // 2. Check dynamic subdomain pattern: {slug}.{base_domain}
+        let origin_str = match origin.to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+
+        if let Ok(url) = url::Url::parse(origin_str)
+            && let Some(host) = url.host_str()
+        {
+            let suffix = format!(".{base_domain}");
+            if let Some(slug) = host.strip_suffix(&suffix) {
+                return !slug.is_empty() && !slug.contains('.');
+            }
+            // Allow bare base domain
+            if host == base_domain {
+                return true;
+            }
+        }
+
+        false
+    });
+
     CorsLayer::new()
-        .allow_origin(origins)
+        .allow_origin(allow_origin)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
         .allow_credentials(true)

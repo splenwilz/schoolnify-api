@@ -89,6 +89,16 @@ fn extract_token(state: &AppState, jar: &CookieJar, request: &Request) -> Result
         }
     }
 
+    // Debug: log what cookies we actually received
+    let cookie_header = request.headers().get("cookie").map(|v| v.to_str().unwrap_or("<invalid>"));
+    let cookie_names: Vec<_> = jar.iter().map(|c| c.name().to_string()).collect();
+    tracing::debug!(
+        cookie_header = ?cookie_header,
+        parsed_cookies = ?cookie_names,
+        expected = %state.config.auth.session_cookie_name,
+        "No auth token found"
+    );
+
     Err(AppError::Unauthorized(
         "No authentication token provided".into(),
     ))
