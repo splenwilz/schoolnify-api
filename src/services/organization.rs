@@ -15,6 +15,7 @@ impl OrganizationService {
 
     /// Create a new organization (school) in the local database.
     /// Automatically appends a numeric suffix if the slug already exists.
+    /// Retries on unique constraint violation (race between slug check and insert).
     pub async fn create(
         &self,
         workos_org_id: &str,
@@ -22,48 +23,56 @@ impl OrganizationService {
         slug: &str,
         domain: Option<&str>,
     ) -> Result<Organization, AppError> {
-        let unique_slug = self.find_unique_slug(slug).await?;
+        for attempt in 0..3 {
+            let unique_slug = self.find_unique_slug(slug).await?;
 
-        let org = sqlx::query_as::<_, Organization>(
-            r#"
-            INSERT INTO organizations (workos_org_id, name, slug, domain)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-            "#,
-        )
-        .bind(workos_org_id)
-        .bind(name)
-        .bind(&unique_slug)
-        .bind(domain)
-        .fetch_one(&self.pool)
-        .await?;
+            match sqlx::query_as::<_, Organization>(
+                r#"
+                INSERT INTO organizations (workos_org_id, name, slug, domain)
+                VALUES ($1, $2, $3, $4)
+                RETURNING *
+                "#,
+            )
+            .bind(workos_org_id)
+            .bind(name)
+            .bind(&unique_slug)
+            .bind(domain)
+            .fetch_one(&self.pool)
+            .await
+            {
+                Ok(org) => return Ok(org),
+                Err(sqlx::Error::Database(ref e)) if e.is_unique_violation() && attempt < 2 => {
+                    tracing::warn!(slug = %unique_slug, attempt, "Slug collision on insert, retrying");
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
 
-        Ok(org)
+        Err(AppError::Conflict(
+            "Could not generate a unique slug for this school name".into(),
+        ))
     }
 
     /// Find a unique slug by appending -2, -3, etc. if the base slug is taken.
+    /// Uses a single query to fetch all matching slugs.
     async fn find_unique_slug(&self, base_slug: &str) -> Result<String, AppError> {
-        let exists = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM organizations WHERE slug = $1)",
+        let pattern = format!("{base_slug}-%");
+        let taken: Vec<String> = sqlx::query_scalar(
+            "SELECT slug FROM organizations WHERE slug = $1 OR slug LIKE $2",
         )
         .bind(base_slug)
-        .fetch_one(&self.pool)
+        .bind(&pattern)
+        .fetch_all(&self.pool)
         .await?;
 
-        if !exists {
+        if !taken.contains(&base_slug.to_string()) {
             return Ok(base_slug.to_string());
         }
 
         for i in 2..=100 {
             let candidate = format!("{base_slug}-{i}");
-            let taken = sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS(SELECT 1 FROM organizations WHERE slug = $1)",
-            )
-            .bind(&candidate)
-            .fetch_one(&self.pool)
-            .await?;
-
-            if !taken {
+            if !taken.contains(&candidate) {
                 return Ok(candidate);
             }
         }

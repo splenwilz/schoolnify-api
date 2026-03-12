@@ -251,7 +251,7 @@ impl WorkOsService {
                 ));
             }
             return Err(AppError::ExternalService(format!(
-                "WorkOS token refresh failed ({status}): {error_body}"
+                "WorkOS token refresh failed ({status})"
             )));
         }
 
@@ -372,7 +372,7 @@ impl WorkOsService {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), error_body = %error_body, "WorkOS org token refresh failed");
+            tracing::error!(status = %status, error_code = extract_workos_code(&error_body).as_deref().unwrap_or("unknown"), "WorkOS org token refresh failed");
 
             if status.as_u16() == 401 || status.as_u16() == 400 {
                 return Err(AppError::Unauthorized(
@@ -558,7 +558,7 @@ impl WorkOsService {
                 ));
             }
             return Err(AppError::ExternalService(format!(
-                "WorkOS code exchange failed ({status}): {error_body}"
+                "WorkOS code exchange failed ({status})"
             )));
         }
 

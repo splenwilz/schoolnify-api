@@ -734,31 +734,63 @@ pub async fn create_organization(
 }
 
 /// Shared logic: create org in WorkOS + local DB, create membership, link user.
+/// Cleans up the WorkOS org if any subsequent step fails.
 async fn setup_organization(
     state: &AppState,
     workos_user_id: &str,
     local_user_id: uuid::Uuid,
     school_name: &str,
 ) -> Result<crate::models::organization::Organization, AppError> {
-    use crate::services::organization::OrganizationService;
-
-    // Create org in WorkOS
+    // Create org in WorkOS (external — must be cleaned up on failure)
     let workos_org = state
         .workos_service
         .create_organization(school_name, None)
         .await?;
 
+    // Attempt remaining steps; clean up WorkOS org on failure
+    match setup_organization_local(state, workos_user_id, local_user_id, school_name, &workos_org.id)
+        .await
+    {
+        Ok(org) => Ok(org),
+        Err(e) => {
+            if let Err(cleanup_err) = state
+                .workos_service
+                .delete_organization(&workos_org.id)
+                .await
+            {
+                tracing::error!(
+                    workos_org_id = %workos_org.id,
+                    error = %cleanup_err,
+                    "Failed to clean up WorkOS org after setup failure"
+                );
+            }
+            Err(e)
+        }
+    }
+}
+
+/// Inner setup steps after WorkOS org creation. Separated so the caller can
+/// perform compensating cleanup on failure.
+async fn setup_organization_local(
+    state: &AppState,
+    workos_user_id: &str,
+    local_user_id: uuid::Uuid,
+    school_name: &str,
+    workos_org_id: &str,
+) -> Result<crate::models::organization::Organization, AppError> {
+    use crate::services::organization::OrganizationService;
+
     // Create local org
     let slug = OrganizationService::generate_slug(school_name);
     let org = state
         .organization_service
-        .create(&workos_org.id, school_name, &slug, None)
+        .create(workos_org_id, school_name, &slug, None)
         .await?;
 
     // Create membership in WorkOS (admin role)
     state
         .workos_service
-        .create_organization_membership(workos_user_id, &workos_org.id, "admin")
+        .create_organization_membership(workos_user_id, workos_org_id, "admin")
         .await?;
 
     // Link user to org locally and set role

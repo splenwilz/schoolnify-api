@@ -17,7 +17,7 @@ pub struct ServerConfig {
     pub request_timeout_secs: u64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
@@ -25,13 +25,36 @@ pub struct DatabaseConfig {
     pub acquire_timeout_secs: u64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+impl std::fmt::Debug for DatabaseConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DatabaseConfig")
+            .field("url", &"[REDACTED]")
+            .field("max_connections", &self.max_connections)
+            .field("min_connections", &self.min_connections)
+            .field("acquire_timeout_secs", &self.acquire_timeout_secs)
+            .finish()
+    }
+}
+
+#[derive(Deserialize, Clone)]
 pub struct WorkOsConfig {
     pub api_key: String,
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
     pub api_base_url: String,
+}
+
+impl std::fmt::Debug for WorkOsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkOsConfig")
+            .field("api_key", &"[REDACTED]")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[REDACTED]")
+            .field("redirect_uri", &self.redirect_uri)
+            .field("api_base_url", &self.api_base_url)
+            .finish()
+    }
 }
 
 impl WorkOsConfig {
