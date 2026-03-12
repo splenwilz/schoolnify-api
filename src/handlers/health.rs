@@ -2,7 +2,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
 
-use crate::models::auth::{HealthChecks, HealthResponse};
+use crate::models::health::{HealthChecks, HealthResponse};
 use crate::state::AppState;
 
 /// Check API health

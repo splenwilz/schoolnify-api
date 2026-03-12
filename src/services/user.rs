@@ -75,23 +75,29 @@ impl UserService {
         Ok(user)
     }
 
-    /// Set the organization for a user.
+    /// Set the organization for a user. Returns error if user not found.
     pub async fn set_user_org(&self, user_id: Uuid, org_id: Uuid) -> Result<(), AppError> {
-        sqlx::query("UPDATE users SET org_id = $2 WHERE id = $1")
+        let result = sqlx::query("UPDATE users SET org_id = $2 WHERE id = $1")
             .bind(user_id)
             .bind(org_id)
             .execute(&self.pool)
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("User not found".into()));
+        }
         Ok(())
     }
 
-    /// Set the role for a user.
+    /// Set the role for a user. Returns error if user not found.
     pub async fn set_user_role(&self, user_id: Uuid, role: &str) -> Result<(), AppError> {
-        sqlx::query("UPDATE users SET role = $2 WHERE id = $1")
+        let result = sqlx::query("UPDATE users SET role = $2 WHERE id = $1")
             .bind(user_id)
             .bind(role)
             .execute(&self.pool)
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("User not found".into()));
+        }
         Ok(())
     }
 

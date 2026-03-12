@@ -14,6 +14,9 @@ cargo install sqlx-cli --no-default-features --features postgres
 cp .env.example .env
 # Edit .env with your actual values
 
+# sqlx-cli requires DATABASE_URL (not APP__DATABASE__URL)
+export DATABASE_URL=postgresql://postgres:password@localhost:5432/schoolnify
+
 # Create database
 sqlx database create
 

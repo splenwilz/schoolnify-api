@@ -64,8 +64,8 @@ use crate::state::AppState;
         models::auth::MessageResponse,
         models::auth::ErrorResponse,
         models::auth::ErrorDetail,
-        models::auth::HealthResponse,
-        models::auth::HealthChecks,
+        models::health::HealthResponse,
+        models::health::HealthChecks,
     )),
     modifiers(&SecurityAddon),
     tags(

@@ -5,7 +5,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Database model for the `users` table.
-#[derive(Debug, Clone, FromRow, Serialize)]
+/// Does NOT derive Serialize — always convert to UserResponse for API output.
+#[derive(Debug, Clone, FromRow)]
 pub struct User {
     pub id: Uuid,
     pub workos_user_id: String,
