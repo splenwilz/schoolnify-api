@@ -17,12 +17,22 @@ impl UserService {
     }
 
     /// Upsert a user from WorkOS data. Creates on first login, updates on subsequent logins.
+    /// Handles re-created WorkOS users (same email, new workos_user_id) by removing the stale record.
     pub async fn upsert_from_workos(&self, workos_user: &WorkOsUser) -> Result<User, AppError> {
         let email_verified = workos_user.email_verified.unwrap_or(false);
         let metadata = workos_user
             .metadata
             .clone()
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+        // Remove stale local record if the same email exists under a different WorkOS ID.
+        // This happens when a user is deleted from WorkOS and re-created.
+        // refresh_tokens cascade-delete via FK.
+        sqlx::query("DELETE FROM users WHERE email = $1 AND workos_user_id != $2")
+            .bind(&workos_user.email)
+            .bind(&workos_user.id)
+            .execute(&self.pool)
+            .await?;
 
         let user = sqlx::query_as::<_, User>(
             r#"
@@ -224,8 +234,34 @@ impl UserService {
     }
 }
 
-fn hash_token(token: &str) -> String {
+pub(crate) fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hash_token;
+
+    #[test]
+    fn test_hash_token_deterministic() {
+        let hash1 = hash_token("test-token");
+        let hash2 = hash_token("test-token");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_token_different_inputs() {
+        let hash1 = hash_token("token-a");
+        let hash2 = hash_token("token-b");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_token_is_64_char_hex() {
+        let hash = hash_token("test");
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
 }

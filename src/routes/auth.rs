@@ -19,6 +19,7 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     let protected = Router::new()
         .route("/me", get(auth::me).delete(auth::delete_account))
+        .route("/establish-session", post(auth::establish_session))
         .route("/create-organization", post(auth::create_organization))
         .layer(axum_mw::from_fn_with_state(
             state,

@@ -10,8 +10,9 @@ use crate::errors::AppError;
 use crate::models::auth::{
     AdminSignupPendingResponse, AdminSignupRequest, AdminSignupResponse, AuthResponse,
     AuthorizeRequest, AuthorizeUrlResponse, CreateOrganizationRequest, CurrentUser, ErrorResponse,
-    LoginRequest, MessageResponse, OAuthCallbackParams, ResendVerificationRequest, SignupRequest,
-    SignupResponse, VerifyEmailRequest, WorkOsAuthResponse,
+    EstablishSessionRequest, LoginRequest, MessageResponse, OAuthCallbackParams,
+    ResendVerificationRequest, SignupRequest, SignupResponse, VerifyEmailRequest,
+    WorkOsAuthResponse,
 };
 use crate::models::organization::OrganizationResponse;
 use crate::models::user::UserResponse;
@@ -62,7 +63,8 @@ pub async fn signup(
                 "Account created successfully",
                 &auth_response.access_token,
                 &auth_response.refresh_token,
-            );
+            )
+            .await;
 
             Ok((StatusCode::CREATED, jar, Json(response)).into_response())
         }
@@ -111,7 +113,8 @@ pub async fn verify_email(
         "Email verified successfully",
         &auth_response.access_token,
         &auth_response.refresh_token,
-    );
+    )
+    .await;
 
     Ok((StatusCode::OK, jar, Json(response)))
 }
@@ -183,7 +186,8 @@ pub async fn login(
                 "Login successful",
                 &auth_response.access_token,
                 &auth_response.refresh_token,
-            );
+            )
+            .await;
 
             Ok((StatusCode::OK, jar, Json(response)).into_response())
         }
@@ -271,6 +275,90 @@ pub async fn me(
         Some(u) => Ok(Json(UserResponse::from(u))),
         None => Err(AppError::NotFound("User not found".into())),
     }
+}
+
+/// Establish a session on the current subdomain
+///
+/// Accepts a valid Bearer token and sets HttpOnly session cookies.
+/// Used when redirecting from the main login page to a school subdomain.
+/// Optionally accepts a refresh_token in the body to set the refresh cookie too.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/establish-session",
+    tag = "Auth",
+    security(("bearer_token" = [])),
+    request_body = EstablishSessionRequest,
+    responses(
+        (status = 200, description = "Session established", body = AuthResponse),
+        (status = 401, description = "Invalid token", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse),
+    )
+)]
+pub async fn establish_session(
+    Extension(current_user): Extension<CurrentUser>,
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<EstablishSessionRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Extract the raw access token from the Authorization header
+    let access_token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or_else(|| AppError::Unauthorized("Bearer token required".into()))?
+        .to_string();
+
+    let user = state
+        .user_service
+        .find_by_workos_id(&current_user.workos_user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+    // Verify the organization exists and the user belongs to it
+    let org = state
+        .organization_service
+        .find_by_slug(&payload.organization_slug)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Organization not found".into()))?;
+
+    if user.org_id != Some(org.id) {
+        return Err(AppError::Forbidden(
+            "User is not a member of this organization".into(),
+        ));
+    }
+
+    // Set session cookie from the access token
+    let jar = if let Some(refresh_token) = &payload.refresh_token {
+        set_auth_cookies(jar, &state, &access_token, refresh_token)
+    } else {
+        // Only set the session cookie if no refresh token provided
+        let same_site = match state.config.auth.cookie_same_site.as_str() {
+            "strict" => SameSite::Strict,
+            "none" => SameSite::None,
+            _ => SameSite::Lax,
+        };
+        let mut session_cookie = Cookie::new(
+            state.config.auth.session_cookie_name.clone(),
+            access_token.clone(),
+        );
+        session_cookie.set_http_only(state.config.auth.cookie_http_only);
+        session_cookie.set_secure(state.config.auth.cookie_secure);
+        session_cookie.set_same_site(same_site);
+        session_cookie.set_path("/");
+        session_cookie.set_max_age(time::Duration::seconds(
+            state.config.auth.access_token_expiry_secs as i64,
+        ));
+        if !state.config.auth.cookie_domain.is_empty() {
+            session_cookie.set_domain(state.config.auth.cookie_domain.clone());
+        }
+        jar.add(session_cookie)
+    };
+
+    let response = build_auth_response(&state, user, "Session established", &access_token, "")
+        .await;
+
+    Ok((StatusCode::OK, jar, Json(response)))
 }
 
 /// Delete current user account
@@ -832,7 +920,8 @@ async fn complete_authentication(
 }
 
 /// Build an AuthResponse, conditionally including the access_token based on config.
-fn build_auth_response(
+/// Looks up the user's organization to include subdomain_url if applicable.
+async fn build_auth_response(
     state: &AppState,
     user: crate::models::user::User,
     message: &str,
@@ -841,10 +930,21 @@ fn build_auth_response(
 ) -> AuthResponse {
     let expose = state.config.auth.expose_token_in_response;
 
+    let subdomain_url = if let Some(org_id) = user.org_id {
+        state
+            .organization_service
+            .find_by_id(org_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|org| build_subdomain_url(state, &org.slug))
+    } else {
+        None
+    };
+
     AuthResponse {
         user: UserResponse::from(user),
         message: message.into(),
-        // Controlled by auth.expose_token_in_response config — set to false in production
         access_token: if expose {
             Some(access_token.to_string())
         } else {
@@ -855,6 +955,7 @@ fn build_auth_response(
         } else {
             None
         },
+        subdomain_url,
     }
 }
 
@@ -913,7 +1014,7 @@ fn set_auth_cookies(
 fn build_subdomain_url(state: &AppState, slug: &str) -> String {
     let base_domain = &state.config.cors.base_domain;
     if base_domain == "localhost" {
-        format!("http://{slug}.localhost:3001")
+        format!("http://{slug}.localhost:3000")
     } else {
         format!("https://{slug}.{base_domain}")
     }

@@ -46,6 +46,7 @@ use crate::state::AppState;
         handlers::auth::callback,
         handlers::auth::admin_signup,
         handlers::auth::create_organization,
+        handlers::auth::establish_session,
     ),
     components(schemas(
         models::user::UserResponse,
@@ -58,6 +59,7 @@ use crate::state::AppState;
         models::auth::AdminSignupRequest,
         models::auth::AdminSignupResponse,
         models::auth::AdminSignupPendingResponse,
+        models::auth::EstablishSessionRequest,
         models::auth::CreateOrganizationRequest,
         models::auth::AuthorizeUrlResponse,
         models::organization::OrganizationResponse,

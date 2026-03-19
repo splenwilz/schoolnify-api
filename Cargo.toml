@@ -58,3 +58,12 @@ utoipa-swagger-ui = { version = "9", features = ["axum"] }
 time = "0.3"
 url = "2"
 sha2 = "0.10"
+
+[dev-dependencies]
+axum-test = "19"
+wiremock = "0.6"
+rsa = "0.9"
+serial_test = "3"
+rand = "0.8"
+base64 = "0.22"
+http-body-util = "0.1.3"

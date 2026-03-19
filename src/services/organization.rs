@@ -92,6 +92,18 @@ impl OrganizationService {
         Ok(org)
     }
 
+    /// Find an organization by its URL slug.
+    pub async fn find_by_slug(&self, slug: &str) -> Result<Option<Organization>, AppError> {
+        let org = sqlx::query_as::<_, Organization>(
+            "SELECT * FROM organizations WHERE slug = $1",
+        )
+        .bind(slug)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(org)
+    }
+
     /// Find an organization by WorkOS organization ID.
     pub async fn find_by_workos_id(
         &self,
@@ -150,5 +162,52 @@ impl OrganizationService {
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("-")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OrganizationService;
+
+    #[test]
+    fn test_generate_slug_simple() {
+        assert_eq!(
+            OrganizationService::generate_slug("Springfield High School"),
+            "springfield-high-school"
+        );
+    }
+
+    #[test]
+    fn test_generate_slug_special_characters() {
+        assert_eq!(
+            OrganizationService::generate_slug("St. Mary's Academy"),
+            "st-mary-s-academy"
+        );
+    }
+
+    #[test]
+    fn test_generate_slug_extra_spaces() {
+        assert_eq!(
+            OrganizationService::generate_slug("  Multiple   Spaces  "),
+            "multiple-spaces"
+        );
+    }
+
+    #[test]
+    fn test_generate_slug_numbers() {
+        assert_eq!(
+            OrganizationService::generate_slug("School #123"),
+            "school-123"
+        );
+    }
+
+    #[test]
+    fn test_generate_slug_empty_string() {
+        assert_eq!(OrganizationService::generate_slug(""), "");
+    }
+
+    #[test]
+    fn test_generate_slug_only_special_chars() {
+        assert_eq!(OrganizationService::generate_slug("---"), "");
     }
 }

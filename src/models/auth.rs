@@ -181,6 +181,17 @@ pub struct ResendVerificationRequest {
     pub user_id: String,
 }
 
+/// Request body for establishing a session on a subdomain.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct EstablishSessionRequest {
+    /// The organization slug from the subdomain (e.g. "springfield-academy").
+    /// Used to verify the user belongs to this organization.
+    #[schema(example = "springfield-academy")]
+    pub organization_slug: String,
+    /// Refresh token to set as a cookie. Pass this from the login response.
+    pub refresh_token: Option<String>,
+}
+
 /// Request body for creating an organization (post-verification).
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateOrganizationRequest {
@@ -239,6 +250,10 @@ pub struct AuthResponse {
     /// Refresh token. **DEV ONLY** — pass to `/create-organization` if needed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
+    /// Subdomain URL for the user's school (e.g. "http://springfield-academy.localhost:3000").
+    /// Only present if the user belongs to an organization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdomain_url: Option<String>,
 }
 
 /// Generic message response.

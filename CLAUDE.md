@@ -48,6 +48,49 @@ cargo test
 - `migrations/` - SQLx database migrations
 - `config/` - TOML configuration files
 
+## Development Approach: Test-Driven Development (TDD)
+
+All new features and bug fixes MUST follow the Red-Green-Refactor cycle:
+
+1. **Red** — Write a failing test FIRST that describes the expected behavior
+2. **Green** — Write the minimum code to make the test pass
+3. **Refactor** — Clean up the code while keeping tests green
+
+### Test structure
+- `tests/` — Integration tests (spawn the real server, hit real endpoints)
+- `src/**/tests.rs` or `#[cfg(test)] mod tests` — Unit tests colocated with source
+- Test database: use `DATABASE_URL` pointing to a separate `schoolnify_test` DB
+
+### Running tests
+```bash
+# Run all tests
+cargo test
+
+# Run a specific test
+cargo test test_name
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run only integration tests
+cargo test --test '*'
+```
+
+### Test conventions
+- Every handler endpoint must have at least one happy-path and one error-path integration test
+- Service functions must have unit tests for business logic and edge cases
+- Use descriptive test names: `test_login_returns_subdomain_url_when_user_has_org`
+- Tests must not depend on external services (mock WorkOS calls in tests)
+- Each test must be independent — no shared mutable state between tests
+- When fixing a bug, write a test that reproduces the bug BEFORE writing the fix
+
+### What to test before submitting code
+```bash
+cargo test                # All tests pass
+cargo clippy              # No warnings
+cargo check               # Compiles clean
+```
+
 ## Architecture Rules
 - NO file should exceed 700 lines
 - Handlers extract data, call services, return responses - no business logic
