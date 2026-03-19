@@ -51,8 +51,13 @@ pub async fn send(
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let json: serde_json::Value =
-        serde_json::from_slice(&bytes).unwrap_or(serde_json::json!(null));
+    let json: serde_json::Value = if bytes.is_empty() {
+        serde_json::json!(null)
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or_else(|e| {
+            panic!("Failed to parse response as JSON (status={status}): {e}\nBody: {}", String::from_utf8_lossy(&bytes))
+        })
+    };
 
     (status, json)
 }

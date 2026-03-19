@@ -23,7 +23,7 @@ This guide covers how to integrate a Next.js frontend with the Schoolnify API, i
 
 ## Architecture Overview
 
-```
+```text
                     ┌──────────────────────────────┐
                     │   Main Site (localhost:3000)  │
                     │   - Landing page             │

@@ -150,12 +150,13 @@ session_cookie_name = "session_token"
 refresh_cookie_name = "refresh_token"
 access_token_expiry_secs = 900
 refresh_token_expiry_days = 30
-cookie_secure = false
+cookie_secure = true
 cookie_http_only = true
 cookie_same_site = "lax"
 cookie_domain = ""
-post_login_redirect_url = "http://localhost:3000"
-expose_token_in_response = true
+post_login_redirect_url = ""
+# Set to true in development if you need tokens in JSON responses
+expose_token_in_response = false
 
 [cors]
 allowed_origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"]

@@ -10,7 +10,7 @@ async fn get_migration_pool() -> &'static PgPool {
     MIGRATION_POOL
         .get_or_init(|| async {
             let database_url = std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgresql://splenwilz@localhost:5432/schoolnify_test".into());
+                .expect("DATABASE_URL must be set for tests (e.g. postgresql://localhost:5432/schoolnify_test)");
 
             let pool = PgPoolOptions::new()
                 .max_connections(2)

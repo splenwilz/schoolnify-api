@@ -99,6 +99,17 @@ pub fn mock_authenticate_email_verification_success(
         })))
 }
 
+/// Mock: POST /user_management/authenticate (email verification grant) → 400
+pub fn mock_authenticate_email_verification_failure() -> Mock {
+    Mock::given(method("POST"))
+        .and(path("/user_management/authenticate"))
+        .and(body_string_contains("email-verification:code"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "code": "invalid_code",
+            "message": "The verification code is invalid or expired."
+        })))
+}
+
 /// Mock: POST /user_management/authenticate (refresh_token grant) → 200
 pub fn mock_refresh_token_success(
     workos_user_id: &str,
@@ -149,7 +160,7 @@ pub fn mock_authenticate_code_success(
         })))
 }
 
-/// Mock: POST /organizations → 200
+/// Mock: POST /organizations → 201
 pub fn mock_create_org_success(org_name: &str, workos_org_id: &str) -> Mock {
     Mock::given(method("POST"))
         .and(path("/organizations"))
@@ -161,7 +172,7 @@ pub fn mock_create_org_success(org_name: &str, workos_org_id: &str) -> Mock {
         })))
 }
 
-/// Mock: POST /user_management/organization_memberships → 200
+/// Mock: POST /user_management/organization_memberships → 201
 pub fn mock_create_membership_success() -> Mock {
     Mock::given(method("POST"))
         .and(path("/user_management/organization_memberships"))

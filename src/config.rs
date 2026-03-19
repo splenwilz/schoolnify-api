@@ -103,7 +103,7 @@ where
         }
 
         fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            Ok(value.split(',').map(|s| s.trim().to_string()).collect())
+            Ok(value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
         }
 
         fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {

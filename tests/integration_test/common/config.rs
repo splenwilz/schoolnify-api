@@ -5,7 +5,7 @@ use schoolnify_api::config::{
 /// Build a test AppConfig with the wiremock server URL as the WorkOS API base.
 pub fn test_config(workos_base_url: &str) -> AppConfig {
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://splenwilz@localhost:5432/schoolnify_test".into());
+        .expect("DATABASE_URL must be set for tests");
 
     AppConfig {
         server: ServerConfig {

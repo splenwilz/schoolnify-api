@@ -20,10 +20,7 @@ impl UserService {
     /// Handles re-created WorkOS users (same email, new workos_user_id) by removing the stale record.
     pub async fn upsert_from_workos(&self, workos_user: &WorkOsUser) -> Result<User, AppError> {
         let email_verified = workos_user.email_verified.unwrap_or(false);
-        let metadata = workos_user
-            .metadata
-            .clone()
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        let metadata = workos_user.metadata.clone();
 
         // Remove stale local record if the same email exists under a different WorkOS ID.
         // This happens when a user is deleted from WorkOS and re-created.
@@ -37,7 +34,7 @@ impl UserService {
         let user = sqlx::query_as::<_, User>(
             r#"
             INSERT INTO users (workos_user_id, email, first_name, last_name, email_verified, profile_picture_url, workos_metadata, last_sign_in_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, '{}'), NOW())
             ON CONFLICT (workos_user_id)
             DO UPDATE SET
                 email = EXCLUDED.email,
@@ -45,7 +42,7 @@ impl UserService {
                 last_name = EXCLUDED.last_name,
                 email_verified = EXCLUDED.email_verified,
                 profile_picture_url = EXCLUDED.profile_picture_url,
-                workos_metadata = EXCLUDED.workos_metadata,
+                workos_metadata = COALESCE(EXCLUDED.workos_metadata, users.workos_metadata),
                 last_sign_in_at = NOW()
             RETURNING *
             "#,
@@ -196,13 +193,16 @@ impl UserService {
         if old_raw == new_raw {
             let token_hash = hash_token(old_raw);
             let expires_at = Utc::now() + chrono::Duration::days(expiry_days);
-            sqlx::query(
+            let result = sqlx::query(
                 "UPDATE refresh_tokens SET expires_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL",
             )
             .bind(&token_hash)
             .bind(expires_at)
             .execute(&self.pool)
             .await?;
+            if result.rows_affected() == 0 {
+                return Err(AppError::Unauthorized("Refresh token not found".into()));
+            }
             return Ok(());
         }
 

@@ -232,4 +232,4 @@ Body Limit Layer (1 MB max)
 Router → Route → Handler
 ```
 
-Protected routes add an additional auth middleware layer that validates the JWT and injects `CurrentUser` into the request extensions.
+Protected routes add an auth middleware layer that validates the JWT and injects `CurrentUser` into the request extensions.

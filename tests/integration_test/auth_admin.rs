@@ -86,7 +86,7 @@ async fn test_create_organization_already_in_org_returns_409() {
     let email = unique_email();
     let workos_id = unique_workos_id();
     let workos_org_id = unique_workos_org_id();
-    let slug = format!("existing-{}", &workos_id[5..13]);
+    let slug = unique_slug("existing");
 
     seed_user_with_org(&state.db_pool, &workos_id, &email, "Existing School", &slug, &workos_org_id, "admin").await;
 
@@ -116,7 +116,7 @@ async fn test_establish_session_success() {
     let email = unique_email();
     let workos_id = unique_workos_id();
     let workos_org_id = unique_workos_org_id();
-    let slug = format!("session-{}", &workos_id[5..13]);
+    let slug = unique_slug("session");
 
     seed_user_with_org(&state.db_pool, &workos_id, &email, "Session School", &slug, &workos_org_id, "admin").await;
 
@@ -150,7 +150,7 @@ async fn test_establish_session_wrong_org_returns_403() {
     seed_user(&state.db_pool, &workos_id, &email).await;
 
     let other_org_id = unique_workos_org_id();
-    let other_slug = format!("other-{}", &other_org_id[4..12]);
+    let other_slug = unique_slug("other");
     sqlx::query("INSERT INTO organizations (workos_org_id, name, slug) VALUES ($1, $2, $3)")
         .bind(&other_org_id)
         .bind("Other School")

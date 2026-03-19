@@ -43,15 +43,7 @@ async fn test_verify_email_invalid_code_returns_400() {
     let mock_server = MockServer::start().await;
     let app = test_app(&mock_server).await;
 
-    wiremock::Mock::given(wiremock::matchers::method("POST"))
-        .and(wiremock::matchers::path("/user_management/authenticate"))
-        .and(wiremock::matchers::body_string_contains("email-verification:code"))
-        .respond_with(wiremock::ResponseTemplate::new(400).set_body_json(serde_json::json!({
-            "code": "invalid_code",
-            "message": "The verification code is invalid or expired."
-        })))
-        .mount(&mock_server)
-        .await;
+    mock_authenticate_email_verification_failure().mount(&mock_server).await;
 
     let (status, _body) = post_json(
         app,

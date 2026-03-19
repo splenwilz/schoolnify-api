@@ -93,7 +93,7 @@ async fn test_login_returns_subdomain_url_when_user_has_org() {
     let email = unique_email();
     let workos_id = unique_workos_id();
     let workos_org_id = unique_workos_org_id();
-    let slug = format!("test-school-{}", &workos_id[5..13]);
+    let slug = unique_slug("test-school");
 
     seed_user_with_org(&state.db_pool, &workos_id, &email, "Test School", &slug, &workos_org_id, "admin").await;
 

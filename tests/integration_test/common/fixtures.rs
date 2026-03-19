@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -19,6 +20,11 @@ pub fn unique_workos_org_id() -> String {
 /// Generate a unique mock token (for access/refresh tokens in mock responses).
 pub fn unique_token(prefix: &str) -> String {
     format!("{prefix}_{}", Uuid::new_v4().simple())
+}
+
+/// Generate a unique URL-safe slug for test organizations.
+pub fn unique_slug(prefix: &str) -> String {
+    format!("{prefix}-{}", &Uuid::new_v4().simple().to_string()[..8])
 }
 
 /// Seed a user directly in the test database. Returns the user's internal UUID.
@@ -99,7 +105,6 @@ pub async fn seed_refresh_token(pool: &PgPool, user_id: Uuid) -> String {
 }
 
 fn sha2_hash(input: &str) -> String {
-    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     format!("{:x}", hasher.finalize())

@@ -70,7 +70,7 @@ async fn test_delete_account_sole_admin_deletes_org() {
     let email = unique_email();
     let workos_id = unique_workos_id();
     let workos_org_id = unique_workos_org_id();
-    let slug = format!("del-org-{}", &workos_id[5..13]);
+    let slug = unique_slug("del-org");
 
     let (_user_id, org_id) = seed_user_with_org(
         &state.db_pool, &workos_id, &email, "Delete Org School", &slug, &workos_org_id, "admin"

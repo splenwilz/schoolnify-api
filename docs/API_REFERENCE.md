@@ -129,7 +129,7 @@ Create a regular user account (no school/organization).
 **Response `201` (verification disabled, auto-authenticated):**
 ```json
 {
-  "user": { "...UserResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
   "message": "Account created successfully",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -181,8 +181,8 @@ Save `pending_authentication_token`, `school_name`, and `user_id` — you need t
 **Response `201` (verification disabled, fully created):**
 ```json
 {
-  "user": { "...UserResponse" },
-  "organization": { "...OrganizationResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "organization": { "id": "...", "name": "...", "slug": "...", "..." : "..." },
   "message": "School admin account created successfully",
   "access_token": "eyJ...",
   "subdomain_url": "http://springfield-high-school.localhost:3000"
@@ -211,7 +211,7 @@ Complete email verification with the 6-digit code sent to the user's email.
 **Response `200`:**
 ```json
 {
-  "user": { "...UserResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
   "message": "Email verified successfully",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -362,7 +362,7 @@ Verifies the user is a member of the organization matching the provided slug. Re
 **Response `200`:**
 ```json
 {
-  "user": { "...UserResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
   "message": "Session established",
   "subdomain_url": "http://springfield-high-school.localhost:3000"
 }
@@ -399,7 +399,7 @@ Create a school organization for the authenticated user. Used after email verifi
 **Response `201`:**
 ```json
 {
-  "user": { "...UserResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
   "organization": {
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
@@ -542,7 +542,7 @@ Returned by login, signup, verify-email, and establish-session.
 
 ```json
 {
-  "user": { "...UserResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
   "message": "Login successful",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -564,8 +564,8 @@ Returned by admin-signup (success) and create-organization.
 
 ```json
 {
-  "user": { "...UserResponse" },
-  "organization": { "...OrganizationResponse" },
+  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "organization": { "id": "...", "name": "...", "slug": "...", "..." : "..." },
   "message": "School admin account created successfully",
   "access_token": "eyJ...",
   "subdomain_url": "http://springfield-high-school.localhost:3000"

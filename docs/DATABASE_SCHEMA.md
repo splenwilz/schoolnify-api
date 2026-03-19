@@ -97,7 +97,7 @@ Raw tokens are never stored — only SHA-256 hashes.
 
 ## Entity Relationship
 
-```
+```text
 users                    organizations
 ┌────────────────┐       ┌──────────────────┐
 │ id (PK)        │       │ id (PK)          │
