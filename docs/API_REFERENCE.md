@@ -136,7 +136,6 @@ Create a regular user account (no school/organization).
     "last_name": "Doe",
     "email_verified": true,
     "profile_picture_url": null,
-    "organization_id": null,
     "role": "user",
     "created_at": "2026-03-20T10:00:00Z"
   },
@@ -206,6 +205,7 @@ Save `pending_authentication_token`, `school_name`, and `user_id` — you need t
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
+    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School admin account created successfully",
@@ -243,7 +243,6 @@ Complete email verification with the 6-digit code sent to the user's email.
     "last_name": "Doe",
     "email_verified": true,
     "profile_picture_url": null,
-    "organization_id": null,
     "role": "user",
     "created_at": "2026-03-20T10:00:00Z"
   },
@@ -458,6 +457,7 @@ Create a school organization for the authenticated user. Used after email verifi
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
+    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School organization created successfully",
@@ -566,7 +566,7 @@ OAuth callback endpoint. WorkOS redirects here after OAuth/SSO authentication. S
 | `last_name` | string? | Nullable |
 | `email_verified` | boolean | |
 | `profile_picture_url` | string? | Nullable |
-| `organization_id` | UUID? | Null if user has no school |
+| `organization_id` | UUID? | Omitted if user has no school |
 | `role` | string | `"user"`, `"admin"`, `"teacher"`, etc. |
 | `created_at` | ISO 8601 | |
 
@@ -603,7 +603,6 @@ Returned by login, signup, verify-email, and establish-session.
     "last_name": "Doe",
     "email_verified": true,
     "profile_picture_url": null,
-    "organization_id": null,
     "role": "user",
     "created_at": "2026-03-20T10:00:00Z"
   },
@@ -643,6 +642,7 @@ Returned by admin-signup (success) and create-organization.
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
+    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School admin account created successfully",

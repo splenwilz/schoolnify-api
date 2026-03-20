@@ -41,9 +41,14 @@ impl OrganizationService {
             .await
             {
                 Ok(org) => return Ok(org),
-                Err(sqlx::Error::Database(ref e)) if e.is_unique_violation() && attempt < 2 => {
-                    tracing::warn!(slug = %unique_slug, attempt, "Slug collision on insert, retrying");
-                    continue;
+                Err(sqlx::Error::Database(ref e)) if e.is_unique_violation() => {
+                    if attempt < 2 {
+                        tracing::warn!(slug = %unique_slug, attempt, "Slug collision on insert, retrying");
+                        continue;
+                    }
+                    return Err(AppError::Conflict(
+                        "Could not generate a unique slug for this school name".into(),
+                    ));
                 }
                 Err(e) => return Err(e.into()),
             }

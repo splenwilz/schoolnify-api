@@ -109,8 +109,9 @@ where
         fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
             let mut vec = Vec::new();
             while let Some(val) = seq.next_element::<String>()? {
-                if !val.trim().is_empty() {
-                    vec.push(val);
+                let trimmed = val.trim().to_string();
+                if !trimmed.is_empty() {
+                    vec.push(trimmed);
                 }
             }
             Ok(vec)
