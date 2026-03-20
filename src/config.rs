@@ -59,7 +59,8 @@ impl std::fmt::Debug for WorkOsConfig {
 
 impl WorkOsConfig {
     pub fn jwks_url(&self) -> String {
-        format!("{}/sso/jwks/{}", self.api_base_url, self.client_id)
+        let base = self.api_base_url.trim_end_matches('/');
+        format!("{base}/sso/jwks/{}", self.client_id)
     }
 }
 

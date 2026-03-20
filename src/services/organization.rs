@@ -23,6 +23,12 @@ impl OrganizationService {
         slug: &str,
         domain: Option<&str>,
     ) -> Result<Organization, AppError> {
+        if slug.is_empty() {
+            return Err(AppError::BadRequest(
+                "School name must contain at least one alphanumeric character".into(),
+            ));
+        }
+
         for attempt in 0..3 {
             let unique_slug = self.find_unique_slug(slug).await?;
 
