@@ -22,7 +22,7 @@ Schoolnify API is a production-grade Rust REST API built with Axum, PostgreSQL, 
 
 ## Project Structure
 
-```
+```text
 src/
 ├── main.rs              # Entry point: tracing, config, DB pool, server startup
 ├── lib.rs               # Router assembly, middleware layers, OpenAPI schema
@@ -56,7 +56,7 @@ src/
 
 ### Layered Architecture
 
-```
+```text
 HTTP Request
     │
     ▼
@@ -114,7 +114,7 @@ The API uses WorkOS User Management with a custom UI (not AuthKit). The frontend
 
 ### Password Authentication
 
-```
+```text
 Frontend                    API                         WorkOS
    │                         │                            │
    │ POST /auth/login        │                            │
@@ -141,7 +141,7 @@ Frontend                    API                         WorkOS
 
 ### JWT Validation (Auth Middleware)
 
-```
+```text
 Frontend                    API Middleware               WorkOS
    │                         │                            │
    │ GET /auth/me            │                            │
@@ -176,7 +176,7 @@ Frontend                    API Middleware               WorkOS
 
 Each school is an "organization" with its own subdomain:
 
-```
+```text
 schoolnify.com             → Main marketing site / login
 springfield.schoolnify.com → Springfield High School dashboard
 greendale.schoolnify.com   → Greendale Community College dashboard
@@ -184,7 +184,7 @@ api.schoolnify.com         → Shared API (all schools)
 ```
 
 **In development:**
-```
+```text
 localhost:3000                       → Main site
 springfield.localhost:3000           → Springfield subdomain
 api: localhost:8080                  → Shared API
@@ -210,7 +210,7 @@ api: localhost:8080                  → Shared API
 
 ## Request Pipeline
 
-```
+```text
 Request
   │
   ▼

@@ -22,13 +22,15 @@ impl UserService {
         let email_verified = workos_user.email_verified.unwrap_or(false);
         let metadata = workos_user.metadata.clone();
 
+        let mut tx = self.pool.begin().await?;
+
         // Remove stale local record if the same email exists under a different WorkOS ID.
         // This happens when a user is deleted from WorkOS and re-created.
         // refresh_tokens cascade-delete via FK.
         sqlx::query("DELETE FROM users WHERE email = $1 AND workos_user_id != $2")
             .bind(&workos_user.email)
             .bind(&workos_user.id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         let user = sqlx::query_as::<_, User>(
@@ -54,9 +56,10 @@ impl UserService {
         .bind(email_verified)
         .bind(&workos_user.profile_picture_url)
         .bind(&metadata)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
+        tx.commit().await?;
         Ok(user)
     }
 
@@ -194,7 +197,7 @@ impl UserService {
             let token_hash = hash_token(old_raw);
             let expires_at = Utc::now() + chrono::Duration::days(expiry_days);
             let result = sqlx::query(
-                "UPDATE refresh_tokens SET expires_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL",
+                "UPDATE refresh_tokens SET expires_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()",
             )
             .bind(&token_hash)
             .bind(expires_at)

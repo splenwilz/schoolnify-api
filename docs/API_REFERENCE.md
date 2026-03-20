@@ -34,12 +34,12 @@ Interactive Swagger docs: `http://localhost:8080/docs`
 Protected endpoints require one of:
 
 1. **Bearer token** (recommended for frontend with proxy):
-   ```
+   ```text
    Authorization: Bearer <access_token>
    ```
 
 2. **Session cookie** (set automatically by auth endpoints):
-   ```
+   ```text
    Cookie: session_token=<jwt>
    ```
 

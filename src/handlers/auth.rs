@@ -405,11 +405,18 @@ pub async fn delete_account(
         }
     }
 
-    // Delete user from WorkOS
-    state
+    // Delete user from WorkOS (continue with local cleanup even if WorkOS user is already gone)
+    match state
         .workos_service
         .delete_user(&current_user.workos_user_id)
-        .await?;
+        .await
+    {
+        Ok(()) => {}
+        Err(AppError::NotFound(_)) => {
+            tracing::warn!(workos_user_id = %current_user.workos_user_id, "WorkOS user already deleted");
+        }
+        Err(e) => return Err(e),
+    }
 
     // Delete locally (user + refresh tokens)
     state.user_service.delete_user(user.id).await?;

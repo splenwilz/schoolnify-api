@@ -52,12 +52,12 @@ All configuration can be overridden via environment variables prefixed with `APP
 | `APP__AUTH__REFRESH_COOKIE_NAME` | `refresh_token` | Name of the refresh cookie |
 | `APP__AUTH__ACCESS_TOKEN_EXPIRY_SECS` | `900` | JWT lifetime (15 min) |
 | `APP__AUTH__REFRESH_TOKEN_EXPIRY_DAYS` | `30` | Refresh token lifetime |
-| `APP__AUTH__COOKIE_SECURE` | `false` | `true` in production (HTTPS only) |
+| `APP__AUTH__COOKIE_SECURE` | `true` | Set `false` in dev `.env` for HTTP |
 | `APP__AUTH__COOKIE_HTTP_ONLY` | `true` | Always `true` — prevents JS access |
 | `APP__AUTH__COOKIE_SAME_SITE` | `lax` | `lax`, `strict`, or `none` |
 | `APP__AUTH__COOKIE_DOMAIN` | `""` | Empty = host-only cookie. Set `.schoolnify.com` in prod |
-| `APP__AUTH__POST_LOGIN_REDIRECT_URL` | `http://localhost:3000` | OAuth callback redirect |
-| `APP__AUTH__EXPOSE_TOKEN_IN_RESPONSE` | `true` | **DEV ONLY.** Set `false` in production |
+| `APP__AUTH__POST_LOGIN_REDIRECT_URL` | `""` | OAuth callback redirect (set in .env for dev) |
+| `APP__AUTH__EXPOSE_TOKEN_IN_RESPONSE` | `false` | Set `true` in dev `.env` to include tokens in JSON |
 
 ### CORS
 
