@@ -48,6 +48,18 @@ impl OrganizationService {
             {
                 Ok(org) => return Ok(org),
                 Err(sqlx::Error::Database(ref e)) if e.is_unique_violation() => {
+                    // Only retry on slug collision, not workos_org_id duplication
+                    let is_slug_violation = e
+                        .constraint()
+                        .map(|c| c.contains("slug"))
+                        .unwrap_or(true);
+
+                    if !is_slug_violation {
+                        return Err(AppError::Conflict(
+                            "Organization already exists".into(),
+                        ));
+                    }
+
                     if attempt < 2 {
                         tracing::warn!(slug = %unique_slug, attempt, "Slug collision on insert, retrying");
                         continue;

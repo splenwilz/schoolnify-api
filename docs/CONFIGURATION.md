@@ -189,6 +189,6 @@ Invalid entries in `allowed_origins` are logged as warnings and skipped.
 | `cookie_secure` | `false` | `true` | HTTPS only in production |
 | `cookie_domain` | `""` | `.schoolnify.com` | Subdomain cookie sharing in prod |
 | `expose_token_in_response` | `true` | `false` | Tokens only in cookies in prod |
-| `cookie_same_site` | `lax` | `lax` | Prevents CSRF, allows same-site nav |
+| `cookie_same_site` | `lax` | `lax` | Mitigates CSRF risk, allows same-site nav |
 
 **Sensitive fields are redacted in debug logs:** `api_key`, `client_secret`, and `database.url` are printed as `[REDACTED]` when the config struct is debug-formatted.

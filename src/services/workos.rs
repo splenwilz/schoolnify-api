@@ -27,7 +27,10 @@ pub struct WorkOsService {
 }
 
 impl WorkOsService {
-    pub fn new(config: WorkOsConfig) -> Self {
+    pub fn new(mut config: WorkOsConfig) -> Self {
+        // Normalize base URL to prevent double slashes in endpoint construction
+        config.api_base_url = config.api_base_url.trim_end_matches('/').to_string();
+
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()

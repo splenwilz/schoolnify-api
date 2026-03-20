@@ -22,7 +22,10 @@ async fn test_authorize_returns_url() {
     assert_eq!(status, StatusCode::OK);
     let url = body["authorization_url"].as_str().expect("authorization_url should be a string");
     assert!(!url.is_empty(), "authorization_url should not be empty");
-    assert!(url.starts_with("http"), "authorization_url should be a valid URL");
+    assert!(
+        url.starts_with("http://") || url.starts_with("https://"),
+        "authorization_url should be an HTTP/HTTPS URL, got: {url}"
+    );
 }
 
 #[tokio::test]

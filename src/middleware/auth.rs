@@ -46,9 +46,10 @@ pub async fn require_auth(
 
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_aud = false;
+    let base = state.config.workos.api_base_url.trim_end_matches('/');
     let expected_issuer = format!(
-        "{}/user_management/{}",
-        state.config.workos.api_base_url, state.config.workos.client_id
+        "{base}/user_management/{}",
+        state.config.workos.client_id
     );
     validation.set_issuer(&[&expected_issuer]);
 
