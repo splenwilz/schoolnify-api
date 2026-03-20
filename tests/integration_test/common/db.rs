@@ -1,9 +1,7 @@
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::OnceCell;
 
-static MIGRATED: AtomicBool = AtomicBool::new(false);
 static MIGRATION_POOL: OnceCell<PgPool> = OnceCell::const_new();
 
 async fn get_migration_pool() -> &'static PgPool {
@@ -23,7 +21,6 @@ async fn get_migration_pool() -> &'static PgPool {
                 .await
                 .expect("Failed to run migrations on test database");
 
-            MIGRATED.store(true, Ordering::SeqCst);
             pool
         })
         .await

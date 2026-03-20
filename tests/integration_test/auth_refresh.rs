@@ -56,7 +56,7 @@ async fn test_refresh_deactivated_user_returns_403() {
         .bind(user_id)
         .execute(&state.db_pool)
         .await
-        .unwrap();
+        .expect("Failed to deactivate test user");
 
     let app = test_router(state.clone());
 

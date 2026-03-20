@@ -91,7 +91,7 @@ pub async fn seed_user_with_org(
 pub async fn seed_refresh_token(pool: &PgPool, user_id: Uuid) -> String {
     let raw_token = format!("test_refresh_{}", Uuid::new_v4());
     let hash = sha2_hash(&raw_token);
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+    let expires_at = chrono::Utc::now() + chrono::TimeDelta::try_days(30).unwrap();
 
     sqlx::query("INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)")
         .bind(user_id)

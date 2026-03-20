@@ -136,7 +136,7 @@ impl OrganizationService {
         let mut tx = self.pool.begin().await?;
 
         // Unlink users from the org
-        sqlx::query("UPDATE users SET org_id = NULL, role = 'member' WHERE org_id = $1")
+        sqlx::query("UPDATE users SET org_id = NULL, role = 'user' WHERE org_id = $1")
             .bind(org_id)
             .execute(&mut *tx)
             .await?;

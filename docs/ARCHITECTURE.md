@@ -187,7 +187,7 @@ api.schoolnify.com         → Shared API (all schools)
 ```text
 localhost:3000                       → Main site
 springfield.localhost:3000           → Springfield subdomain
-api: localhost:8080                  → Shared API
+localhost:8080                       → Shared API
 ```
 
 ### How Organizations Work

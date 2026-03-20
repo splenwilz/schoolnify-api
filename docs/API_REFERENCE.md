@@ -129,7 +129,17 @@ Create a regular user account (no school/organization).
 **Response `201` (verification disabled, auto-authenticated):**
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "john@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": null,
+    "role": "user",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "Account created successfully",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -181,8 +191,23 @@ Save `pending_authentication_token`, `school_name`, and `user_id` — you need t
 **Response `201` (verification disabled, fully created):**
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
-  "organization": { "id": "...", "name": "...", "slug": "...", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "admin@springfield-high.edu",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": "660e8400-e29b-41d4-a716-446655440000",
+    "role": "admin",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
+  "organization": {
+    "id": "660e8400-e29b-41d4-a716-446655440000",
+    "name": "Springfield High School",
+    "slug": "springfield-high-school",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "School admin account created successfully",
   "access_token": "eyJ...",
   "subdomain_url": "http://springfield-high-school.localhost:3000"
@@ -211,7 +236,17 @@ Complete email verification with the 6-digit code sent to the user's email.
 **Response `200`:**
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "john@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": null,
+    "role": "user",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "Email verified successfully",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -281,8 +316,7 @@ Authenticate with email and password.
 ```
 
 Key fields:
-- `subdomain_url` — present if user belongs to an organization. Use for redirect.
-- `subdomain_url` — `null` if user has no organization.
+- `subdomain_url` — present if user belongs to an organization (use for redirect), `null` otherwise.
 - `access_token` / `refresh_token` — present when `expose_token_in_response` is enabled (dev mode).
 
 **Response `403` (email verification required):**
@@ -362,7 +396,17 @@ Verifies the user is a member of the organization matching the provided slug. Re
 **Response `200`:**
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "admin@springfield-high.edu",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": "660e8400-e29b-41d4-a716-446655440000",
+    "role": "admin",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "Session established",
   "subdomain_url": "http://springfield-high-school.localhost:3000"
 }
@@ -399,12 +443,22 @@ Create a school organization for the authenticated user. Used after email verifi
 **Response `201`:**
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "admin@springfield-high.edu",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": "660e8400-e29b-41d4-a716-446655440000",
+    "role": "admin",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "organization": {
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
-    "created_at": "2026-03-19T10:00:00Z"
+    "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School organization created successfully",
   "access_token": "eyJ...",
@@ -542,7 +596,17 @@ Returned by login, signup, verify-email, and establish-session.
 
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "john@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": null,
+    "role": "user",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "Login successful",
   "access_token": "eyJ...",
   "refresh_token": "6sVQ...",
@@ -564,8 +628,23 @@ Returned by admin-signup (success) and create-organization.
 
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "user", "..." : "..." },
-  "organization": { "id": "...", "name": "...", "slug": "...", "..." : "..." },
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "admin@springfield-high.edu",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email_verified": true,
+    "profile_picture_url": null,
+    "organization_id": "660e8400-e29b-41d4-a716-446655440000",
+    "role": "admin",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
+  "organization": {
+    "id": "660e8400-e29b-41d4-a716-446655440000",
+    "name": "Springfield High School",
+    "slug": "springfield-high-school",
+    "created_at": "2026-03-20T10:00:00Z"
+  },
   "message": "School admin account created successfully",
   "access_token": "eyJ...",
   "subdomain_url": "http://springfield-high-school.localhost:3000"
