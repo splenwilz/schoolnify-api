@@ -62,7 +62,7 @@ pub async fn signup(
                 user,
                 "Account created successfully",
                 &auth_response.access_token,
-                &auth_response.refresh_token,
+                Some(&auth_response.refresh_token),
             )
             .await;
 
@@ -112,7 +112,7 @@ pub async fn verify_email(
         user,
         "Email verified successfully",
         &auth_response.access_token,
-        &auth_response.refresh_token,
+        Some(&auth_response.refresh_token),
     )
     .await;
 
@@ -185,7 +185,7 @@ pub async fn login(
                 user,
                 "Login successful",
                 &auth_response.access_token,
-                &auth_response.refresh_token,
+                Some(&auth_response.refresh_token),
             )
             .await;
 
@@ -355,7 +355,7 @@ pub async fn establish_session(
         jar.add(session_cookie)
     };
 
-    let response = build_auth_response(&state, user, "Session established", &access_token, "")
+    let response = build_auth_response(&state, user, "Session established", &access_token, None)
         .await;
 
     Ok((StatusCode::OK, jar, Json(response)))
@@ -933,7 +933,7 @@ async fn build_auth_response(
     user: crate::models::user::User,
     message: &str,
     access_token: &str,
-    refresh_token: &str,
+    refresh_token: Option<&str>,
 ) -> AuthResponse {
     let expose = state.config.auth.expose_token_in_response;
 
@@ -958,7 +958,7 @@ async fn build_auth_response(
             None
         },
         refresh_token: if expose {
-            Some(refresh_token.to_string())
+            refresh_token.map(|t| t.to_string())
         } else {
             None
         },

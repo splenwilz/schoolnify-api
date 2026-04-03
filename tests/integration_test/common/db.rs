@@ -45,7 +45,7 @@ pub async fn setup_test_db() -> PgPool {
 /// Truncate all tables. Use in tests that need a clean slate.
 #[allow(dead_code)]
 pub async fn truncate_all(pool: &PgPool) {
-    sqlx::query("TRUNCATE TABLE refresh_tokens, users, organizations CASCADE")
+    sqlx::query("TRUNCATE TABLE refresh_tokens, users, organizations RESTART IDENTITY CASCADE")
         .execute(pool)
         .await
         .expect("Failed to truncate tables");
