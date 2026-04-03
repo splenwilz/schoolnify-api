@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -40,8 +38,8 @@ async fn main() -> anyhow::Result<()> {
     let app = schoolnify_api::build_router(state);
 
     // Start server
-    let addr: SocketAddr = format!("{}:{}", config.server.host, config.server.port).parse()?;
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind((config.server.host.as_str(), config.server.port)).await?;
+    let addr = listener.local_addr()?;
     tracing::info!(%addr, "Server listening");
 
     axum::serve(listener, app)

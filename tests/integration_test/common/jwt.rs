@@ -88,7 +88,7 @@ pub fn sign_test_jwt(workos_user_id: &str, org_id: Option<&str>, workos_base_url
         permissions: None,
         exp: now + 900,
         iat: now,
-        iss: format!("{workos_base_url}/user_management/{TEST_CLIENT_ID}"),
+        iss: format!("{}/user_management/{TEST_CLIENT_ID}", workos_base_url.trim_end_matches('/')),
     };
 
     let mut header = Header::new(Algorithm::RS256);
