@@ -100,10 +100,10 @@ Raw tokens are never stored — only SHA-256 hashes.
 ```text
 users                    organizations
 ┌────────────────┐       ┌──────────────────┐
-│ id (PK)        │       │ id (PK)          │
+│ id (PK)        │       │ id (PK) <────────┐
 │ workos_user_id │       │ workos_org_id    │
 │ email          │       │ name             │
-│ org_id (FK) ───┼──────>│ slug             │
+│ org_id (FK) ───┼───────┘ slug             │
 │ role           │       │ domain           │
 │ ...            │       │ ...              │
 └───────┬────────┘       └──────────────────┘

@@ -60,7 +60,7 @@ pub struct WorkOsCreateUserResponse {
 // -- Request/Response DTOs --
 
 /// Request body for user signup.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema)]
 pub struct SignupRequest {
     /// User's email address
     #[schema(example = "john@example.com")]
@@ -72,6 +72,17 @@ pub struct SignupRequest {
     pub first_name: Option<String>,
     #[schema(example = "Doe")]
     pub last_name: Option<String>,
+}
+
+impl std::fmt::Debug for SignupRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignupRequest")
+            .field("email", &self.email)
+            .field("password", &"[REDACTED]")
+            .field("first_name", &self.first_name)
+            .field("last_name", &self.last_name)
+            .finish()
+    }
 }
 
 /// Request body for email verification.
@@ -134,7 +145,7 @@ pub struct OAuthCallbackParams {
 }
 
 /// Request body for school admin signup.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema)]
 pub struct AdminSignupRequest {
     /// Admin's email address
     #[schema(example = "admin@springfield-high.edu")]
@@ -149,6 +160,18 @@ pub struct AdminSignupRequest {
     /// Name of the school to create
     #[schema(example = "Springfield High School")]
     pub school_name: String,
+}
+
+impl std::fmt::Debug for AdminSignupRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AdminSignupRequest")
+            .field("email", &self.email)
+            .field("password", &"[REDACTED]")
+            .field("first_name", &self.first_name)
+            .field("last_name", &self.last_name)
+            .field("school_name", &self.school_name)
+            .finish()
+    }
 }
 
 /// Response returned after successful admin signup.
@@ -230,12 +253,21 @@ pub struct WorkOsRole {
 }
 
 /// Request body for user login.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
     #[schema(example = "john@example.com")]
     pub email: String,
     #[schema(example = "SecurePass123!")]
     pub password: String,
+}
+
+impl std::fmt::Debug for LoginRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginRequest")
+            .field("email", &self.email)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 /// Response returned after successful signup or login.

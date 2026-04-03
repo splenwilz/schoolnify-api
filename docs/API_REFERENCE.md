@@ -205,7 +205,6 @@ Save `pending_authentication_token`, `school_name`, and `user_id` — you need t
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
-    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School admin account created successfully",
@@ -457,7 +456,6 @@ Create a school organization for the authenticated user. Used after email verifi
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
-    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School organization created successfully",
@@ -577,7 +575,6 @@ OAuth callback endpoint. WorkOS redirects here after OAuth/SSO authentication. S
   "id": "660e8400-e29b-41d4-a716-446655440000",
   "name": "Springfield High School",
   "slug": "springfield-high-school",
-  "domain": null,
   "created_at": "2026-03-19T10:00:00Z"
 }
 ```
@@ -587,7 +584,7 @@ OAuth callback endpoint. WorkOS redirects here after OAuth/SSO authentication. S
 | `id` | UUID | Internal org ID |
 | `name` | string | Display name |
 | `slug` | string | URL-safe identifier (used in subdomains) |
-| `domain` | string? | Custom domain if configured |
+| `domain` | string? | Omitted if not configured |
 | `created_at` | ISO 8601 | |
 
 ### AuthResponse
@@ -642,7 +639,6 @@ Returned by admin-signup (success) and create-organization.
     "id": "660e8400-e29b-41d4-a716-446655440000",
     "name": "Springfield High School",
     "slug": "springfield-high-school",
-    "domain": null,
     "created_at": "2026-03-20T10:00:00Z"
   },
   "message": "School admin account created successfully",

@@ -155,7 +155,9 @@ fn build_cors_layer(state: &AppState) -> CorsLayer {
         {
             let suffix = format!(".{base_domain}");
             if let Some(slug) = host.strip_suffix(&suffix) {
-                return !slug.is_empty() && !slug.contains('.');
+                return !slug.is_empty()
+                        && !slug.contains('.')
+                        && slug.chars().any(|c| c.is_ascii_alphanumeric());
             }
             // Allow bare base domain
             if host == base_domain {

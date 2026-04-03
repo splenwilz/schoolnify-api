@@ -117,7 +117,7 @@ The API uses WorkOS User Management with a custom UI (not AuthKit). The frontend
 ```text
 Frontend                    API                         WorkOS
    │                         │                            │
-   │ POST /auth/login        │                            │
+   │ POST /api/v1/auth/login  │                            │
    │ {email, password}       │                            │
    │────────────────────────>│                            │
    │                         │ POST /user_management/     │
@@ -144,7 +144,7 @@ Frontend                    API                         WorkOS
 ```text
 Frontend                    API Middleware               WorkOS
    │                         │                            │
-   │ GET /auth/me            │                            │
+   │ GET /api/v1/auth/me     │                            │
    │ Bearer: <JWT>           │                            │
    │────────────────────────>│                            │
    │                         │ Decode JWT header → kid    │

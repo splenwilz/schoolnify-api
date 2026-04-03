@@ -26,6 +26,7 @@ All configuration can be overridden via environment variables prefixed with `APP
 | `APP__WORKOS__API_KEY` | `sk_test_...` or `sk_live_...` | WorkOS API key |
 | `APP__WORKOS__CLIENT_ID` | `client_01K...` | WorkOS client ID |
 | `APP__WORKOS__CLIENT_SECRET` | `sk_test_...` | WorkOS client secret |
+| `APP__WORKOS__REDIRECT_URI` | `http://localhost:8080/api/v1/auth/callback` | OAuth callback URL |
 
 ### Server
 
