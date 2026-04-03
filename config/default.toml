@@ -1,0 +1,35 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+request_timeout_secs = 30
+
+[database]
+url = ""
+max_connections = 20
+min_connections = 5
+acquire_timeout_secs = 5
+
+[workos]
+api_key = ""
+client_id = ""
+client_secret = ""
+redirect_uri = ""
+api_base_url = "https://api.workos.com"
+
+[auth]
+session_cookie_name = "session_token"
+refresh_cookie_name = "refresh_token"
+access_token_expiry_secs = 900
+refresh_token_expiry_days = 30
+# Production-safe defaults. Override in .env for local dev.
+cookie_secure = true
+cookie_http_only = true
+cookie_same_site = "lax"
+cookie_domain = ""
+post_login_redirect_url = ""
+expose_token_in_response = false
+
+[cors]
+# Production-safe default: no origins allowed. Override in .env for dev.
+allowed_origins = []
+base_domain = "localhost"
