@@ -85,7 +85,7 @@ Get the saved school setup state and section completion metadata for the authent
 
 ## `PATCH /api/v1/schools/setup`
 
-Save partial school setup data. Merges incoming top-level keys with existing data using PostgreSQL JSONB merge. All fields are optional. The frontend can call this on every field change (debounced) — it is idempotent.
+Save partial school setup data. Incoming top-level section keys are merged with existing data — sections not included in the request are preserved unchanged. Each included section is replaced entirely. All fields are optional. The frontend can call this on every field change (debounced) — it is idempotent.
 
 **Auth:** Required (admin only)
 

@@ -6,7 +6,7 @@ This guide explains how to integrate the school setup wizard with the backend AP
 
 ## Overview
 
-School setup is a 12-section configuration wizard that admins complete after creating their school. The backend stores setup data as a single JSONB document per organization, supporting partial saves so admins can complete it across multiple sessions.
+School setup is a 12-section configuration wizard that admins complete after creating their school. The backend stores setup data in normalized relational tables (one parent config table + 8 child tables for arrays), supporting partial saves so admins can complete it across multiple sessions.
 
 ```text
 Admin creates school → Redirected to subdomain → Setup wizard loads

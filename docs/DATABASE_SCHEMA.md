@@ -95,43 +95,60 @@ Raw tokens are never stored — only SHA-256 hashes.
 
 ---
 
-### `school_setups`
+### `school_configs`
 
-Stores school configuration data as a single JSONB document per organization. Supports partial saves for the multi-step setup wizard.
+Parent configuration table (one row per org). Contains ~50 typed scalar columns for school setup preferences. Child tables store array data (grading scales, terms, subjects, etc.).
 
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | UUID | no | `gen_random_uuid()` | Primary key |
 | `org_id` | UUID | no | — | **UNIQUE** FK → `organizations(id)` **ON DELETE CASCADE** |
-| `data` | JSONB | no | `'{}'` | Setup configuration (12 sections) |
+| `school_type` | TEXT | yes | | identity section |
+| `motto` | TEXT | yes | | identity section |
+| `primary_color` | TEXT | yes | | branding section |
+| `country` | TEXT | yes | | location section |
+| `timezone` | TEXT | yes | | location section |
+| `calendar_type` | TEXT | yes | | academic calendar |
+| `report_template` | TEXT | yes | | report card |
+| `promotion_criteria` | TEXT | yes | | policies |
+| ... | ... | ... | | (~50 columns total) |
 | `created_at` | TIMESTAMPTZ | no | `NOW()` | |
 | `updated_at` | TIMESTAMPTZ | no | `NOW()` | Auto-updated by trigger |
 
-**Constraint:** One setup row per organization (`org_id UNIQUE`).
+### Child Tables (8 tables, all with `org_id` FK + `position` for ordering)
 
-**JSONB structure:** Top-level keys are section names (`identity`, `branding`, `location`, `localization`, `academic_calendar`, `grade_levels`, `grading`, `schedule`, `subjects`, `fees`, `report_card`, `policies`). Each section value is a JSON object. The PATCH endpoint merges at the top level using PostgreSQL `||`.
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `school_grading_scales` | Grading scale rows (A1-F9) | grade, min_score, max_score, descriptor, gpa_points |
+| `school_terms` | Academic calendar terms | name, start_date, end_date |
+| `school_subjects` | Subject list | name, department |
+| `school_grade_levels` | Grade level list | name, group_name |
+| `school_fee_categories` | Fee categories | name, mandatory, frequency, fee_type, amounts (JSONB) |
+| `school_fee_discounts` | Fee discounts | name, percentage, applies_to |
+| `school_schedule_groups` | Schedule groups (e.g. "Primary") | group_name, start_time, end_time, period_duration |
+| `school_schedule_periods` | Periods within groups | label, start_time, end_time, is_break (FK → groups) |
 
-**Trigger:** `update_school_setups_updated_at` — sets `updated_at = NOW()` before each update.
+All child tables have `ON DELETE CASCADE` from `organizations` (via `org_id` FK). Schedule periods cascade from schedule groups.
 
 ---
 
 ## Entity Relationship
 
 ```text
-users                    organizations            school_setups
+users                    organizations            school_configs
 ┌────────────────┐       ┌──────────────────┐     ┌──────────────────┐
 │ id (PK)        │       │ id (PK) <────────┐     │ id (PK)          │
-│ workos_user_id │       │ workos_org_id    │     │ org_id (FK/UQ) ──┤
-│ email          │       │ name             │     │ data (JSONB)     │
-│ org_id (FK) ───┼───────┘ slug             │     │ created_at       │
-│ role           │       │ domain           │     │ updated_at       │
+│ workos_user_id │       │ workos_org_id    │     │ org_id (FK/UQ)   │
+│ email          │       │ name             │     │ school_type      │
+│ org_id (FK) ───┼───────┘ slug             │     │ motto, ...       │
+│ role           │       │ domain           │     │ (~50 columns)    │
 │ ...            │       │ ...              │     └──────────────────┘
-└───────┬────────┘       └──────────────────┘
-        │
-        │ 1:N (ON DELETE CASCADE)
-        │
-┌───────┴────────┐
-│ refresh_tokens │
+└───────┬────────┘       └──────────────────┘            │
+        │                                          8 child tables
+        │ 1:N (ON DELETE CASCADE)              (grading_scales, terms,
+        │                                       subjects, grade_levels,
+┌───────┴────────┐                              fee_categories, fee_discounts,
+│ refresh_tokens │                              schedule_groups → periods)
 │ id (PK)        │
 │ user_id (FK)   │
 │ token_hash     │
@@ -149,7 +166,8 @@ users                    organizations            school_setups
 | `20260220000001_create_users.sql` | Users table, refresh_tokens table, triggers |
 | `20260305000001_create_organizations.sql` | Organizations table, `org_id` column on users |
 | `20260312000001_add_email_unique_constraint.sql` | UNIQUE constraint on `users.email` |
-| `20260403000001_create_school_setups.sql` | School setup draft storage (JSONB per org) |
+| `20260403000001_create_school_setups.sql` | Initial school setup (JSONB, later normalized) |
+| `20260419000001_normalize_school_setups.sql` | Normalize to school_configs + 8 child tables, drop school_setups |
 
 ### Running Migrations
 

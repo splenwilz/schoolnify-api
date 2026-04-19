@@ -100,6 +100,12 @@ impl SchoolSetupService {
             }
         }
 
+        // Touch updated_at on the config row so it reflects child table changes
+        sqlx::query("UPDATE school_configs SET updated_at = NOW() WHERE org_id = $1")
+            .bind(org_id)
+            .execute(&mut *tx)
+            .await?;
+
         tx.commit().await?;
 
         // Re-fetch the full data after commit
@@ -687,6 +693,12 @@ async fn upsert_schedule(
     org_id: Uuid,
     v: &serde_json::Value,
 ) -> Result<(), AppError> {
+    // Only proceed if schedules key exists; don't delete data if key is absent
+    let schedules_val = match v.get("schedules") {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
     // Delete existing groups (periods cascade via FK)
     sqlx::query("DELETE FROM school_schedule_groups WHERE org_id = $1")
         .bind(org_id)
@@ -694,7 +706,7 @@ async fn upsert_schedule(
         .await?;
 
     // Schedules can be an object (keyed by group name) or an array of group objects
-    if let Some(obj) = v.get("schedules").and_then(|s| s.as_object()) {
+    if let Some(obj) = schedules_val.as_object() {
         let mut pos: i16 = 0;
         for (group_name, group_val) in obj {
             let group_id = insert_schedule_group(

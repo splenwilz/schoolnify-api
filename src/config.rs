@@ -148,7 +148,7 @@ impl AppConfig {
             ("workos.client_secret", &self.workos.client_secret),
         ];
         for (name, value) in required {
-            if value.is_empty() {
+            if value.trim().is_empty() {
                 anyhow::bail!("Required config '{name}' is empty. Set via APP__{} env var.", name.replace('.', "__").to_uppercase());
             }
         }
