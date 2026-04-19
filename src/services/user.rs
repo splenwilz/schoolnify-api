@@ -57,7 +57,13 @@ impl UserService {
         .bind(&workos_user.profile_picture_url)
         .bind(&metadata)
         .fetch_one(&mut *tx)
-        .await?;
+        .await
+        .map_err(|e| match &e {
+            sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
+                AppError::Conflict("A user with this email already exists".into())
+            }
+            _ => e.into(),
+        })?;
 
         tx.commit().await?;
         Ok(user)
@@ -83,6 +89,20 @@ impl UserService {
         .await?;
 
         Ok(user)
+    }
+
+    /// Set the organization and role for a user atomically. Returns error if user not found.
+    pub async fn set_user_org_and_role(&self, user_id: Uuid, org_id: Uuid, role: &str) -> Result<(), AppError> {
+        let result = sqlx::query("UPDATE users SET org_id = $2, role = $3 WHERE id = $1")
+            .bind(user_id)
+            .bind(org_id)
+            .bind(role)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("User not found".into()));
+        }
+        Ok(())
     }
 
     /// Set the organization for a user. Returns error if user not found.

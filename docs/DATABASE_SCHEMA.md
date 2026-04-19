@@ -95,17 +95,37 @@ Raw tokens are never stored — only SHA-256 hashes.
 
 ---
 
+### `school_setups`
+
+Stores school configuration data as a single JSONB document per organization. Supports partial saves for the multi-step setup wizard.
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | UUID | no | `gen_random_uuid()` | Primary key |
+| `org_id` | UUID | no | — | **UNIQUE** FK → `organizations(id)` **ON DELETE CASCADE** |
+| `data` | JSONB | no | `'{}'` | Setup configuration (12 sections) |
+| `created_at` | TIMESTAMPTZ | no | `NOW()` | |
+| `updated_at` | TIMESTAMPTZ | no | `NOW()` | Auto-updated by trigger |
+
+**Constraint:** One setup row per organization (`org_id UNIQUE`).
+
+**JSONB structure:** Top-level keys are section names (`identity`, `branding`, `location`, `localization`, `academic_calendar`, `grade_levels`, `grading`, `schedule`, `subjects`, `fees`, `report_card`, `policies`). Each section value is a JSON object. The PATCH endpoint merges at the top level using PostgreSQL `||`.
+
+**Trigger:** `update_school_setups_updated_at` — sets `updated_at = NOW()` before each update.
+
+---
+
 ## Entity Relationship
 
 ```text
-users                    organizations
-┌────────────────┐       ┌──────────────────┐
-│ id (PK)        │       │ id (PK) <────────┐
-│ workos_user_id │       │ workos_org_id    │
-│ email          │       │ name             │
-│ org_id (FK) ───┼───────┘ slug             │
-│ role           │       │ domain           │
-│ ...            │       │ ...              │
+users                    organizations            school_setups
+┌────────────────┐       ┌──────────────────┐     ┌──────────────────┐
+│ id (PK)        │       │ id (PK) <────────┐     │ id (PK)          │
+│ workos_user_id │       │ workos_org_id    │     │ org_id (FK/UQ) ──┤
+│ email          │       │ name             │     │ data (JSONB)     │
+│ org_id (FK) ───┼───────┘ slug             │     │ created_at       │
+│ role           │       │ domain           │     │ updated_at       │
+│ ...            │       │ ...              │     └──────────────────┘
 └───────┬────────┘       └──────────────────┘
         │
         │ 1:N (ON DELETE CASCADE)
@@ -129,6 +149,7 @@ users                    organizations
 | `20260220000001_create_users.sql` | Users table, refresh_tokens table, triggers |
 | `20260305000001_create_organizations.sql` | Organizations table, `org_id` column on users |
 | `20260312000001_add_email_unique_constraint.sql` | UNIQUE constraint on `users.email` |
+| `20260403000001_create_school_setups.sql` | School setup draft storage (JSONB per org) |
 
 ### Running Migrations
 

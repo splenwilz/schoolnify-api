@@ -47,6 +47,9 @@ use crate::state::AppState;
         handlers::auth::admin_signup,
         handlers::auth::create_organization,
         handlers::auth::establish_session,
+        handlers::school_setup::get_setup,
+        handlers::school_setup::patch_setup,
+        handlers::school_setup::get_public_branding,
     ),
     components(schemas(
         models::user::UserResponse,
@@ -68,11 +71,16 @@ use crate::state::AppState;
         models::auth::ErrorDetail,
         models::health::HealthResponse,
         models::health::HealthChecks,
+        models::school_setup::SchoolSetupResponse,
+        models::school_setup::SetupCompletion,
+        models::school_setup::SectionStatus,
+        models::school_setup::PublicBrandingResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
         (name = "Health", description = "Health check endpoints"),
         (name = "Auth", description = "Authentication endpoints"),
+        (name = "Schools", description = "School setup and branding endpoints"),
     )
 )]
 struct ApiDoc;

@@ -82,6 +82,17 @@ pub async fn post_json_auth(
     send(app, Method::POST, uri, Some(body), vec![("authorization", &auth)]).await
 }
 
+/// Convenience: PATCH with JSON body and Bearer token.
+pub async fn patch_json_auth(
+    app: Router,
+    uri: &str,
+    body: serde_json::Value,
+    token: &str,
+) -> (StatusCode, serde_json::Value) {
+    let auth = format!("Bearer {token}");
+    send(app, Method::PATCH, uri, Some(body), vec![("authorization", &auth)]).await
+}
+
 /// Convenience: GET with Bearer token.
 pub async fn get_auth(
     app: Router,
