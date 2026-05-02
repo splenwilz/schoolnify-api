@@ -136,6 +136,22 @@ impl AppConfig {
             .build()?;
 
         let app_config: AppConfig = config.try_deserialize()?;
+        app_config.validate()?;
         Ok(app_config)
+    }
+
+    fn validate(&self) -> anyhow::Result<()> {
+        let required = [
+            ("database.url", &self.database.url),
+            ("workos.api_key", &self.workos.api_key),
+            ("workos.client_id", &self.workos.client_id),
+            ("workos.client_secret", &self.workos.client_secret),
+        ];
+        for (name, value) in required {
+            if value.trim().is_empty() {
+                anyhow::bail!("Required config '{name}' is empty. Set via APP__{} env var.", name.replace('.', "__").to_uppercase());
+            }
+        }
+        Ok(())
     }
 }

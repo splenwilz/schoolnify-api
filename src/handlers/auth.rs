@@ -39,10 +39,11 @@ pub async fn signup(
     jar: CookieJar,
     Json(payload): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let email = payload.email.trim().to_lowercase();
     let created_user = state
         .workos_service
         .create_user(
-            &payload.email,
+            &email,
             &payload.password,
             payload.first_name.as_deref(),
             payload.last_name.as_deref(),
@@ -51,7 +52,7 @@ pub async fn signup(
 
     let auth_result = state
         .workos_service
-        .authenticate_with_password(&payload.email, &payload.password)
+        .authenticate_with_password(&email, &payload.password)
         .await?;
 
     match auth_result {
@@ -64,7 +65,7 @@ pub async fn signup(
                 &auth_response.access_token,
                 Some(&auth_response.refresh_token),
             )
-            .await;
+            .await?;
 
             Ok((StatusCode::CREATED, jar, Json(response)).into_response())
         }
@@ -114,7 +115,7 @@ pub async fn verify_email(
         &auth_response.access_token,
         Some(&auth_response.refresh_token),
     )
-    .await;
+    .await?;
 
     Ok((StatusCode::OK, jar, Json(response)))
 }
@@ -172,9 +173,10 @@ pub async fn login(
     jar: CookieJar,
     Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let email = payload.email.trim().to_lowercase();
     let auth_result = state
         .workos_service
-        .authenticate_with_password(&payload.email, &payload.password)
+        .authenticate_with_password(&email, &payload.password)
         .await?;
 
     match auth_result {
@@ -187,7 +189,7 @@ pub async fn login(
                 &auth_response.access_token,
                 Some(&auth_response.refresh_token),
             )
-            .await;
+            .await?;
 
             Ok((StatusCode::OK, jar, Json(response)).into_response())
         }
@@ -301,6 +303,12 @@ pub async fn establish_session(
     headers: axum::http::HeaderMap,
     Json(payload): Json<EstablishSessionRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    tracing::info!(
+        workos_user_id = %current_user.workos_user_id,
+        organization_slug = %payload.organization_slug,
+        "Session establishment requested"
+    );
+
     // Extract the raw access token from the Authorization header
     let access_token = headers
         .get(axum::http::header::AUTHORIZATION)
@@ -336,7 +344,11 @@ pub async fn establish_session(
         let same_site = match state.config.auth.cookie_same_site.as_str() {
             "strict" => SameSite::Strict,
             "none" => SameSite::None,
-            _ => SameSite::Lax,
+            "lax" => SameSite::Lax,
+            other => {
+                tracing::warn!(value = %other, "Unknown cookie_same_site value, defaulting to Lax");
+                SameSite::Lax
+            }
         };
         let mut session_cookie = Cookie::new(
             state.config.auth.session_cookie_name.clone(),
@@ -356,7 +368,7 @@ pub async fn establish_session(
     };
 
     let response = build_auth_response(&state, user, "Session established", &access_token, None)
-        .await;
+        .await?;
 
     Ok((StatusCode::OK, jar, Json(response)))
 }
@@ -382,6 +394,7 @@ pub async fn delete_account(
     State(state): State<AppState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, AppError> {
+    tracing::info!(workos_user_id = %current_user.workos_user_id, "Account deletion requested");
     let user = state
         .user_service
         .find_by_workos_id(&current_user.workos_user_id)
@@ -405,21 +418,24 @@ pub async fn delete_account(
         }
     }
 
-    // Delete user from WorkOS (continue with local cleanup even if WorkOS user is already gone)
-    match state
+    // Delete locally first (can be retried), then from WorkOS (idempotent)
+    state.user_service.delete_user(user.id).await?;
+
+    // Delete from WorkOS (continue even if already gone)
+    if let Err(e) = state
         .workos_service
         .delete_user(&current_user.workos_user_id)
         .await
     {
-        Ok(()) => {}
-        Err(AppError::NotFound(_)) => {
-            tracing::warn!(workos_user_id = %current_user.workos_user_id, "WorkOS user already deleted");
+        match e {
+            AppError::NotFound(_) => {
+                tracing::warn!(workos_user_id = %current_user.workos_user_id, "WorkOS user already deleted");
+            }
+            other => {
+                tracing::error!(workos_user_id = %current_user.workos_user_id, error = %other, "Failed to delete WorkOS user after local delete");
+            }
         }
-        Err(e) => return Err(e),
     }
-
-    // Delete locally (user + refresh tokens)
-    state.user_service.delete_user(user.id).await?;
 
     // Clear cookies
     let mut session_removal = Cookie::new(state.config.auth.session_cookie_name.clone(), "");
@@ -630,11 +646,13 @@ pub async fn admin_signup(
     jar: CookieJar,
     Json(payload): Json<AdminSignupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let email = payload.email.trim().to_lowercase();
+
     // Step 1: Create user in WorkOS
     let created_user = state
         .workos_service
         .create_user(
-            &payload.email,
+            &email,
             &payload.password,
             payload.first_name.as_deref(),
             payload.last_name.as_deref(),
@@ -644,7 +662,7 @@ pub async fn admin_signup(
     // Step 2: Authenticate
     let auth_result = state
         .workos_service
-        .authenticate_with_password(&payload.email, &payload.password)
+        .authenticate_with_password(&email, &payload.password)
         .await?;
 
     match auth_result {
@@ -888,9 +906,8 @@ async fn setup_organization_local(
         .create_organization_membership(workos_user_id, workos_org_id, "admin")
         .await?;
 
-    // Link user to org locally and set role
-    state.user_service.set_user_org(local_user_id, org.id).await?;
-    state.user_service.set_user_role(local_user_id, "admin").await?;
+    // Link user to org locally and set role (single atomic UPDATE)
+    state.user_service.set_user_org_and_role(local_user_id, org.id, "admin").await?;
 
     Ok(org)
 }
@@ -934,22 +951,20 @@ async fn build_auth_response(
     message: &str,
     access_token: &str,
     refresh_token: Option<&str>,
-) -> AuthResponse {
+) -> Result<AuthResponse, AppError> {
     let expose = state.config.auth.expose_token_in_response;
 
     let subdomain_url = if let Some(org_id) = user.org_id {
         state
             .organization_service
             .find_by_id(org_id)
-            .await
-            .ok()
-            .flatten()
+            .await?
             .map(|org| build_subdomain_url(state, &org.slug))
     } else {
         None
     };
 
-    AuthResponse {
+    Ok(AuthResponse {
         user: UserResponse::from(user),
         message: message.into(),
         access_token: if expose {
@@ -963,7 +978,7 @@ async fn build_auth_response(
             None
         },
         subdomain_url,
-    }
+    })
 }
 
 fn set_auth_cookies(
@@ -975,7 +990,11 @@ fn set_auth_cookies(
     let same_site = match state.config.auth.cookie_same_site.as_str() {
         "strict" => SameSite::Strict,
         "none" => SameSite::None,
-        _ => SameSite::Lax,
+        "lax" => SameSite::Lax,
+        other => {
+            tracing::warn!(value = %other, "Unknown cookie_same_site value, defaulting to Lax");
+            SameSite::Lax
+        }
     };
 
     let mut session_cookie =
@@ -984,9 +1003,8 @@ fn set_auth_cookies(
     session_cookie.set_secure(state.config.auth.cookie_secure);
     session_cookie.set_same_site(same_site);
     session_cookie.set_path("/");
-    session_cookie.set_max_age(time::Duration::seconds(
-        state.config.auth.access_token_expiry_secs as i64,
-    ));
+    // No Max-Age — let WorkOS JWT exp claim handle expiry.
+    // Browser keeps the cookie until tab/browser closes (session cookie).
     if !state.config.auth.cookie_domain.is_empty() {
         session_cookie.set_domain(state.config.auth.cookie_domain.clone());
     }

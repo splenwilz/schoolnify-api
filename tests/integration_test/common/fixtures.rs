@@ -104,6 +104,16 @@ pub async fn seed_refresh_token(pool: &PgPool, user_id: Uuid) -> String {
     raw_token
 }
 
+/// Seed school setup data for an organization using the service's upsert_merge.
+pub async fn seed_school_setup(pool: &PgPool, org_id: Uuid, data: serde_json::Value) {
+    use schoolnify_api::services::school_setup::SchoolSetupService;
+    let service = SchoolSetupService::new(pool.clone());
+    service
+        .upsert_merge(org_id, &data)
+        .await
+        .expect("Failed to seed school setup");
+}
+
 fn sha2_hash(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());

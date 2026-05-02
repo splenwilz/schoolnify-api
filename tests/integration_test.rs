@@ -10,4 +10,5 @@ mod integration_test {
     mod auth_me;
     mod auth_admin;
     mod auth_oauth;
+    mod school_setup;
 }
