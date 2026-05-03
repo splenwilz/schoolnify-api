@@ -184,6 +184,132 @@ Returned by GET `/api/v1/schools/{slug}/public`.
 
 ---
 
+## StudentResponse
+
+Returned by `GET /api/v1/students/{id}`, in the `data` array of `GET /api/v1/students`, and in many other student endpoints. See [students.md → Student object](students.md#student-object) for the canonical shape and field-level notes.
+
+Key callouts:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID | Server-generated |
+| `admission_number` | string | Unique per school. Format `{prefix}/{year}/{seq:03}` |
+| `gender` | enum | `male` or `female` |
+| `status` | enum | `active`, `inactive`, `suspended`, `graduated`, `withdrawn`, `transferred` |
+| `gpa` | float? | **Always `null` until grades module ships** |
+| `attendance_rate` | float? | **Always `null` until attendance module ships** |
+| `fee_status` | string | **Always `"unknown"` until fees module ships** |
+| `guardians` | GuardianResponse[] | Up to 3 |
+
+---
+
+## GuardianResponse
+
+```json
+{
+  "id": "grd_xyz789",
+  "first_name": "Emeka",
+  "last_name": "Okonkwo",
+  "phone": "+2348012345678",
+  "email": "emeka.o@example.com",
+  "relationship": "Father",
+  "occupation": "Engineer",
+  "is_primary": true
+}
+```
+
+Optional fields (`phone`, `email`, `relationship`, `occupation`) are omitted when null.
+
+At most one guardian per student has `is_primary: true`.
+
+---
+
+## StudentListResponse
+
+Returned by `GET /api/v1/students`.
+
+```json
+{
+  "data": [/* StudentResponse[] */],
+  "pagination": {
+    "page": 1,
+    "page_size": 25,
+    "total": 30,
+    "total_pages": 2
+  },
+  "summary": {
+    "total_students": 30,
+    "active": 29,
+    "average_gpa": null,
+    "average_attendance": null
+  }
+}
+```
+
+`summary` is whole-school stats and **ignores list filters**.
+
+---
+
+## StatusChangeResponse
+
+Returned by `PATCH /api/v1/students/{id}/status`.
+
+```json
+{
+  "student": { /* StudentResponse */ },
+  "status_change": {
+    "id": "stchg_...",
+    "from_status": "active",
+    "to_status": "transferred",
+    "reason": "Family relocated to UK",
+    "effective_date": "2025-05-15",
+    "changed_by": "550e8400-...",
+    "changed_at": "2026-05-03T10:30:00Z"
+  }
+}
+```
+
+---
+
+## PromoteSummary
+
+Returned by `POST /api/v1/students/promote`.
+
+```json
+{
+  "promoted": 28,
+  "retained": 1,
+  "graduated": 1,
+  "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+  "errors": []
+}
+```
+
+`batch_id` is a server-generated UUID shared across all `student_class_history` rows from this call — useful for "show me the results of last September's promotion".
+
+---
+
+## BulkImportResponse
+
+Returned by `POST /api/v1/students/bulk-import` (status `200` on success or partial-with-skip, `422` when errors are present and `skip_invalid != true`).
+
+```json
+{
+  "imported": 27,
+  "skipped": 3,
+  "errors": [
+    { "row": 5, "field": "date_of_birth", "message": "must be YYYY-MM-DD" }
+  ],
+  "imported_students": [
+    { "id": "std_xxx", "admission_number": "INF/2026/028", "first_name": "Ada", "last_name": "Lovelace" }
+  ]
+}
+```
+
+On `422`: `imported: 0`, `imported_students: []`. **No rows are inserted in this case.**
+
+---
+
 ## ErrorResponse
 
 All errors follow this structure.

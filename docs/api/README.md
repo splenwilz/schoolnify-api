@@ -12,6 +12,7 @@ Interactive Swagger docs: `http://localhost:8080/docs`
 |------|--------|-------------|
 | [auth.md](auth.md) | `/api/v1/auth/*` | Signup, login, logout, session management, OAuth |
 | [schools.md](schools.md) | `/api/v1/schools/*` | School setup wizard, public branding |
+| [students.md](students.md) | `/api/v1/students/*` | Student CRUD, status/class changes, promotion, CSV import/export |
 | [health.md](health.md) | `/health` | Health check |
 | [types.md](types.md) | — | Shared response types (UserResponse, etc.) |
 

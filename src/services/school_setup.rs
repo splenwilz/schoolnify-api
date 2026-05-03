@@ -268,7 +268,8 @@ async fn upsert_identity(
     sqlx::query(
         r#"UPDATE school_configs SET
             school_type = $2, ownership_type = $3, motto = $4,
-            founded_year = $5, accreditation_number = $6, logo_url = $7
+            founded_year = $5, accreditation_number = $6, logo_url = $7,
+            admission_number_prefix = $8
            WHERE org_id = $1"#,
     )
     .bind(org_id)
@@ -278,6 +279,7 @@ async fn upsert_identity(
     .bind(str_val(v, "founded_year"))
     .bind(str_val(v, "accreditation_number"))
     .bind(str_val(v, "logo_url"))
+    .bind(str_val(v, "admission_number_prefix"))
     .execute(&mut *tx)
     .await?;
     Ok(())
@@ -972,6 +974,9 @@ mod tests {
             founded_year: None,
             accreditation_number: None,
             logo_url: None,
+            admission_number_prefix: None,
+            admission_number_seq_year: None,
+            admission_number_next_seq: 1,
             primary_color: None,
             secondary_color: None,
             country: None,

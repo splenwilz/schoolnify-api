@@ -11,4 +11,5 @@ mod integration_test {
     mod auth_admin;
     mod auth_oauth;
     mod school_setup;
+    mod students;
 }
