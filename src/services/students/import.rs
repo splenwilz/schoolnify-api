@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
+use sqlx::Acquire;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -172,7 +173,14 @@ impl StudentsService {
             };
             let enrollment_date = c.enrollment_date.unwrap_or_else(super::crud::today);
 
-            let inserted: StudentRow = sqlx::query_as(
+            // Wrap each student INSERT in a SAVEPOINT so a unique-violation on
+            // an admin-supplied admission_number doesn't poison the whole tx.
+            // Without this, `?` would propagate, sqlx would auto-rollback the
+            // entire bulk import, and `skip_invalid=true` couldn't honor its
+            // contract of importing valid rows alongside row-level errors.
+            let mut sp = tx.begin().await?;
+
+            let result = sqlx::query_as::<_, StudentRow>(
                 r#"
                 INSERT INTO students (
                     org_id, admission_number, first_name, middle_name, last_name,
@@ -222,23 +230,47 @@ impl StudentsService {
             .bind(&c.religion)
             .bind(&c.tribe)
             .bind(&c.avatar_url)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| match &e {
-                sqlx::Error::Database(db) if db.is_unique_violation() => AppError::Conflict(
-                    format!("admission_number '{admission_number}' already exists"),
-                ),
-                _ => e.into(),
-            })?;
+            .fetch_one(&mut *sp)
+            .await;
 
-            insert_guardians(&mut tx, inserted.id, org_id, &c.guardians).await?;
-
-            imported_students.push(ImportedStudent {
-                id: inserted.id,
-                admission_number: inserted.admission_number.clone(),
-                first_name: inserted.first_name.clone(),
-                last_name: inserted.last_name.clone(),
-            });
+            match result {
+                Ok(inserted) => {
+                    insert_guardians(&mut sp, inserted.id, org_id, &c.guardians).await?;
+                    sp.commit().await?;
+                    imported_students.push(ImportedStudent {
+                        id: inserted.id,
+                        admission_number: inserted.admission_number.clone(),
+                        first_name: inserted.first_name.clone(),
+                        last_name: inserted.last_name.clone(),
+                    });
+                }
+                Err(sqlx::Error::Database(db)) if db.is_unique_violation() => {
+                    sp.rollback().await?;
+                    let msg = format!("admission_number '{admission_number}' already exists");
+                    if skip_invalid {
+                        errors.push(ImportRowError {
+                            row: c.row_num,
+                            field: Some("admission_number".into()),
+                            message: msg,
+                        });
+                        continue;
+                    } else {
+                        tx.rollback().await?;
+                        let response = BulkImportResponse {
+                            imported: 0,
+                            skipped: skipped_count + 1,
+                            errors: vec![ImportRowError {
+                                row: c.row_num,
+                                field: Some("admission_number".into()),
+                                message: msg,
+                            }],
+                            imported_students: vec![],
+                        };
+                        return Ok((response, false));
+                    }
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
 
         tx.commit().await?;

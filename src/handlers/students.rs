@@ -32,6 +32,30 @@ async fn resolve_user_and_org(
     Ok((user.id, org_id))
 }
 
+/// Same as [`resolve_user_and_org`] but additionally requires `role = 'admin'`.
+/// All write endpoints in this module gate on this. Non-admin staff (teachers,
+/// office) can still call read endpoints; tightening this further requires
+/// proper school-staff roles, which don't exist yet.
+async fn resolve_admin_and_org(
+    state: &AppState,
+    current_user: &CurrentUser,
+) -> Result<(Uuid, Uuid), AppError> {
+    let user = state
+        .user_service
+        .find_by_workos_id(&current_user.workos_user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    if user.role != "admin" {
+        return Err(AppError::Forbidden(
+            "Only admins can modify student records".into(),
+        ));
+    }
+    let org_id = user
+        .org_id
+        .ok_or_else(|| AppError::BadRequest("User is not part of an organization".into()))?;
+    Ok((user.id, org_id))
+}
+
 /// List students with filters, pagination, and whole-school summary.
 #[utoipa::path(
     get,
@@ -84,7 +108,7 @@ pub async fn create_student(
     State(state): State<AppState>,
     Json(req): Json<CreateStudentRequest>,
 ) -> Result<(StatusCode, Json<StudentResponse>), AppError> {
-    let (_user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (_user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     let response = state.students_service.create(org_id, req).await?;
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -139,7 +163,7 @@ pub async fn patch_student(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateStudentRequest>,
 ) -> Result<Json<StudentResponse>, AppError> {
-    let (_user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (_user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     let response = state.students_service.patch(org_id, id, req).await?;
     Ok(Json(response))
 }
@@ -162,7 +186,7 @@ pub async fn delete_student(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let (user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     state.students_service.soft_delete(org_id, id, Some(user_id)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -188,7 +212,7 @@ pub async fn change_status(
     Path(id): Path<Uuid>,
     Json(req): Json<ChangeStatusRequest>,
 ) -> Result<Json<StatusChangeResponse>, AppError> {
-    let (user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     let response = state
         .students_service
         .change_status(org_id, id, req, Some(user_id))
@@ -217,7 +241,7 @@ pub async fn change_class(
     Path(id): Path<Uuid>,
     Json(req): Json<ChangeClassRequest>,
 ) -> Result<Json<StudentResponse>, AppError> {
-    let (user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     let response = state
         .students_service
         .change_class(org_id, id, req, Some(user_id))
@@ -245,7 +269,7 @@ pub async fn promote(
     State(state): State<AppState>,
     Json(req): Json<PromoteRequest>,
 ) -> Result<Json<PromoteSummary>, AppError> {
-    let (user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
     let response = state.students_service.promote(org_id, req, Some(user_id)).await?;
     Ok(Json(response))
 }
@@ -275,7 +299,7 @@ pub async fn bulk_import(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<BulkImportResponse>), AppError> {
-    let (user_id, org_id) = resolve_user_and_org(&state, &current_user).await?;
+    let (user_id, org_id) = resolve_admin_and_org(&state, &current_user).await?;
 
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut mapping: Option<HashMap<String, String>> = None;
@@ -356,6 +380,8 @@ pub async fn export(
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
         .header(header::CONTENT_DISPOSITION, disposition)
+        // Sensitive PII; tell browsers and intermediaries not to cache.
+        .header(header::CACHE_CONTROL, "no-store")
         .body(Body::from(bytes))
         .map_err(|e| AppError::Internal(format!("response build: {e}")))?;
     Ok(response)

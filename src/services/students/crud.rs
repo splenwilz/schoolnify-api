@@ -136,12 +136,11 @@ impl StudentsService {
 
         let mut response = StudentResponse::from_row(student, guardians);
 
-        for token in include.split(',').map(str::trim) {
-            match token {
-                "recent_payments" => response.recent_payments = Some(vec![]),
-                "recent_attendance" => response.recent_attendance = Some(vec![]),
-                _ => {}
-            }
+        if include_contains(include, "recent_payments") {
+            response.recent_payments = Some(vec![]);
+        }
+        if include_contains(include, "recent_attendance") {
+            response.recent_attendance = Some(vec![]);
         }
 
         Ok(response)
@@ -189,11 +188,23 @@ impl StudentsService {
         let student_ids: Vec<Uuid> = page_data.iter().map(|s| s.id).collect();
         let mut guardians_map = fetch_guardians_for_students(&self.pool, &student_ids).await?;
 
+        let include = q.include.as_deref().unwrap_or("");
+        let want_payments = include_contains(include, "recent_payments");
+        let want_attendance = include_contains(include, "recent_attendance");
+
         let data: Vec<StudentResponse> = page_data
             .into_iter()
             .map(|s| {
                 let g = guardians_map.remove(&s.id).unwrap_or_default();
-                StudentResponse::from_row(s, g)
+                let mut resp = StudentResponse::from_row(s, g);
+                // Empty arrays for now; populated when fees/attendance modules ship.
+                if want_payments {
+                    resp.recent_payments = Some(vec![]);
+                }
+                if want_attendance {
+                    resp.recent_attendance = Some(vec![]);
+                }
+                resp
             })
             .collect();
 
@@ -785,4 +796,9 @@ pub(super) async fn fetch_filtered(
 
 pub(super) fn today() -> NaiveDate {
     chrono::Utc::now().date_naive()
+}
+
+/// True if `include` (a comma-separated list) contains the given key.
+fn include_contains(include: &str, key: &str) -> bool {
+    include.split(',').map(str::trim).any(|t| t == key)
 }

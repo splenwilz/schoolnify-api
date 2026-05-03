@@ -680,6 +680,114 @@ async fn test_list_with_extreme_page_returns_empty_without_panic() {
 
 #[tokio::test]
 #[serial]
+async fn test_non_admin_cannot_create_student() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    // Seed a non-admin user (role = "user") in an org with grade levels configured.
+    let school = setup_school(&state, &mock_server, "user").await;
+    let app = test_router(state.clone());
+
+    let (status, body) = post_json_auth(
+        app,
+        "/api/v1/students",
+        min_student("Primary 1"),
+        &school.token,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN, "body: {body}");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_non_admin_can_still_list_students() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "user").await;
+    let app = test_router(state.clone());
+
+    let (status, _) = get_auth(app, "/api/v1/students", &school.token).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_bulk_import_savepoints_isolate_duplicate_admission() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "admin").await;
+
+    // Pre-existing student with admission_number "INF/EXISTING/001".
+    let app = test_router(state.clone());
+    let (s, _) = post_json_auth(
+        app,
+        "/api/v1/students",
+        json!({
+            "first_name": "Pre",
+            "last_name": "Existing",
+            "date_of_birth": "2017-01-01",
+            "gender": "male",
+            "grade_level": "Primary 1",
+            "admission_number": "INF/EXISTING/001"
+        }),
+        &school.token,
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    // CSV with three rows: one collides with the existing admission_number,
+    // two are valid. With skip_invalid=true the two valid rows should still be
+    // imported — the savepoint isolates the unique-violation per row.
+    let csv = b"first_name,last_name,date_of_birth,gender,grade_level,admission_number\n\
+                Ada,Lovelace,2017-12-10,female,Primary 1,INF/EXISTING/001\n\
+                Grace,Hopper,2018-09-09,female,Primary 2,\n\
+                Linus,Torvalds,2019-04-04,male,Primary 1,\n";
+    let mapping = json!({
+        "first_name": "first_name",
+        "last_name": "last_name",
+        "date_of_birth": "date_of_birth",
+        "gender": "gender",
+        "grade_level": "grade_level",
+        "admission_number": "admission_number"
+    })
+    .to_string();
+
+    let app = test_router(state.clone());
+    let (status, body) = multipart_post(
+        app,
+        "/api/v1/students/bulk-import",
+        vec![
+            ("file", Some("students.csv"), csv.to_vec()),
+            ("mapping", None, mapping.into_bytes()),
+            ("skip_invalid", None, b"true".to_vec()),
+        ],
+        &school.token,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["imported"], 2, "two valid rows imported despite the dup");
+    assert!(!body["errors"].as_array().unwrap().is_empty());
+    let err_msg = body["errors"][0]["message"].as_str().unwrap_or("");
+    assert!(
+        err_msg.contains("INF/EXISTING/001"),
+        "expected duplicate-admission_number message, got {err_msg}"
+    );
+
+    // Total students in the school: 1 (pre-existing) + 2 (imported) = 3.
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE org_id = $1")
+        .bind(school.org_id)
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 3);
+}
+
+#[tokio::test]
+#[serial]
 async fn test_cross_tenant_access_returns_404() {
     let mock_server = MockServer::start().await;
     mount_jwks_endpoint(&mock_server).await;

@@ -146,7 +146,9 @@ pub fn build_router(state: AppState) -> Router {
     let cors = build_cors_layer(&state);
 
     let api_routes = routes::build(state.clone())
-        .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1 MB
+        // 10 MB accommodates bulk-import CSVs (up to ~5000 rows + multipart overhead).
+        // Other endpoints don't approach this; bumping is a no-op for them.
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

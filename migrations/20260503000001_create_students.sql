@@ -68,6 +68,11 @@ CREATE INDEX idx_students_org_grade_section ON students(org_id, grade_level, sec
 CREATE INDEX idx_students_org_last_name ON students(org_id, last_name);
 CREATE INDEX idx_students_org_enrollment_date ON students(org_id, enrollment_date DESC);
 
+-- Composite key target for child tables. Lets guardians/history rows reference
+-- (student_id, org_id) so the DB rejects any row where the two don't match,
+-- defending the denormalized org_id on those child tables.
+ALTER TABLE students ADD CONSTRAINT students_id_org_unique UNIQUE (id, org_id);
+
 CREATE TRIGGER update_students_updated_at
     BEFORE UPDATE ON students FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
@@ -76,7 +81,7 @@ CREATE TRIGGER update_students_updated_at
 
 CREATE TABLE IF NOT EXISTS student_guardians (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id      UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    student_id      UUID NOT NULL,
     org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
     first_name      TEXT NOT NULL,
@@ -89,7 +94,11 @@ CREATE TABLE IF NOT EXISTS student_guardians (
     position        SMALLINT NOT NULL DEFAULT 0,
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Composite FK ensures (student_id, org_id) maps to an actual student in that org.
+    CONSTRAINT student_guardians_student_org_fk
+        FOREIGN KEY (student_id, org_id) REFERENCES students(id, org_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_student_guardians_student_id ON student_guardians(student_id);
@@ -106,7 +115,7 @@ CREATE TRIGGER update_student_guardians_updated_at
 
 CREATE TABLE IF NOT EXISTS student_status_history (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id          UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    student_id          UUID NOT NULL,
     org_id              UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
     from_status         TEXT NOT NULL,
@@ -114,7 +123,15 @@ CREATE TABLE IF NOT EXISTS student_status_history (
     reason              TEXT,
     effective_date      DATE NOT NULL DEFAULT CURRENT_DATE,
     changed_by_user_id  UUID REFERENCES users(id) ON DELETE SET NULL,
-    changed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    changed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT student_status_history_student_org_fk
+        FOREIGN KEY (student_id, org_id) REFERENCES students(id, org_id) ON DELETE CASCADE,
+    -- Constrain to the same status enum as students.status so audit can't store invalid values.
+    CONSTRAINT student_status_history_from_chk
+        CHECK (from_status IN ('active', 'inactive', 'suspended', 'graduated', 'withdrawn', 'transferred')),
+    CONSTRAINT student_status_history_to_chk
+        CHECK (to_status IN ('active', 'inactive', 'suspended', 'graduated', 'withdrawn', 'transferred'))
 );
 
 CREATE INDEX idx_student_status_history_student ON student_status_history(student_id, changed_at DESC);
@@ -124,7 +141,7 @@ CREATE INDEX idx_student_status_history_org ON student_status_history(org_id, ch
 
 CREATE TABLE IF NOT EXISTS student_class_history (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id              UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    student_id              UUID NOT NULL,
     org_id                  UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
     from_grade_level        TEXT,
@@ -138,7 +155,9 @@ CREATE TABLE IF NOT EXISTS student_class_history (
     promotion_batch_id      UUID,
     changed_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT student_class_history_kind_chk CHECK (change_kind IN ('promote', 'retain', 'graduate', 'manual'))
+    CONSTRAINT student_class_history_kind_chk CHECK (change_kind IN ('promote', 'retain', 'graduate', 'manual')),
+    CONSTRAINT student_class_history_student_org_fk
+        FOREIGN KEY (student_id, org_id) REFERENCES students(id, org_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_student_class_history_student ON student_class_history(student_id, changed_at DESC);

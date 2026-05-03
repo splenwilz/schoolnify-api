@@ -408,14 +408,15 @@ Export filtered student list as CSV. Same query parameters as `GET /api/v1/stude
 
 **Response `200`:**
 
-```
+```text
 Content-Type: text/csv; charset=utf-8
 Content-Disposition: attachment; filename="students_2026-05-03.csv"
+Cache-Control: no-store
 ```
 
 CSV columns (in order):
 
-```
+```text
 Admission No, First Name, Last Name, Middle Name, Grade, Section, Gender, DOB, Status, Boarding, Fee Status, Guardian Name, Guardian Phone, Guardian Email
 ```
 

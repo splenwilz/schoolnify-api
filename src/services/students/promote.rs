@@ -63,7 +63,12 @@ impl StudentsService {
             let (to_grade, to_section, change_kind) = match d.action.as_str() {
                 "promote" => {
                     let to_g = d.to_grade.clone().unwrap();
-                    let to_s = d.to_section.clone();
+                    // If the caller didn't specify a section, the UPDATE keeps
+                    // the existing section via COALESCE. The audit row must
+                    // record the *effective* section, not the raw `None` from
+                    // the request, otherwise the history diverges from the row.
+                    let effective_section =
+                        d.to_section.clone().or_else(|| current.section.clone());
                     sqlx::query(
                         "UPDATE students SET grade_level = $3, section = COALESCE($4, section)
                          WHERE id = $1 AND org_id = $2",
@@ -71,11 +76,11 @@ impl StudentsService {
                     .bind(d.student_id)
                     .bind(org_id)
                     .bind(&to_g)
-                    .bind(&to_s)
+                    .bind(&d.to_section)
                     .execute(&mut *tx)
                     .await?;
                     promoted += 1;
-                    (Some(to_g), to_s, "promote")
+                    (Some(to_g), effective_section, "promote")
                 }
                 "retain" => {
                     retained += 1;
