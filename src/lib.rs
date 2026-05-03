@@ -15,7 +15,6 @@ use axum::http::{HeaderValue, Method, StatusCode};
 use axum::Router;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
@@ -145,10 +144,11 @@ impl Modify for SecurityAddon {
 pub fn build_router(state: AppState) -> Router {
     let cors = build_cors_layer(&state);
 
+    // Body limits are scoped per sub-router (see routes/{auth,schools,students}.rs):
+    // 1MB on most endpoints, 10MB on /api/v1/students/bulk-import only.
+    // tower-http's RequestBodyLimitLayer composes most-restrictive-wins, so a
+    // global limit would cap the upload route too — hence the per-router setup.
     let api_routes = routes::build(state.clone())
-        // 10 MB accommodates bulk-import CSVs (up to ~5000 rows + multipart overhead).
-        // Other endpoints don't approach this; bumping is a no-op for them.
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

@@ -614,8 +614,26 @@ async fn test_export_returns_csv_with_correct_columns() {
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let text = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(text.starts_with("Admission No,First Name,Last Name"), "got header: {text}");
-    assert!(text.contains("Ada,Lovelace") || text.contains("Lovelace"));
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(lines.len() >= 2, "expected at least header + one row, got: {text}");
+
+    // Exact header, in column order. Catches accidental column reorder/rename.
+    assert_eq!(
+        lines[0],
+        "Admission No,First Name,Last Name,Middle Name,Grade,Section,Gender,DOB,Status,Boarding,Fee Status,Guardian Name,Guardian Phone,Guardian Email"
+    );
+
+    // Exact data row for the seeded "Ada Lovelace" student. Most fields are
+    // empty (no middle_name/section/boarding/guardians) so the row is largely
+    // commas; this asserts that empty fields land in the right positions.
+    let year = chrono::Utc::now().format("%Y").to_string();
+    let expected_row = format!(
+        "INF/{year}/001,Ada,Lovelace,,Primary 1,,female,2017-12-10,active,,unknown,,,"
+    );
+    assert!(
+        lines.iter().any(|l| *l == expected_row),
+        "expected row {expected_row:?} in CSV; got lines: {lines:?}"
+    );
 }
 
 #[tokio::test]

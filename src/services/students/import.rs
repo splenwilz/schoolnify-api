@@ -235,14 +235,45 @@ impl StudentsService {
 
             match result {
                 Ok(inserted) => {
-                    insert_guardians(&mut sp, inserted.id, org_id, &c.guardians).await?;
-                    sp.commit().await?;
-                    imported_students.push(ImportedStudent {
-                        id: inserted.id,
-                        admission_number: inserted.admission_number.clone(),
-                        first_name: inserted.first_name.clone(),
-                        last_name: inserted.last_name.clone(),
-                    });
+                    // Guardian inserts are inside the same savepoint, so a guardian
+                    // failure can be isolated to this row instead of aborting the
+                    // whole import. Mirrors the unique-violation arm below.
+                    match insert_guardians(&mut sp, inserted.id, org_id, &c.guardians).await {
+                        Ok(_) => {
+                            sp.commit().await?;
+                            imported_students.push(ImportedStudent {
+                                id: inserted.id,
+                                admission_number: inserted.admission_number.clone(),
+                                first_name: inserted.first_name.clone(),
+                                last_name: inserted.last_name.clone(),
+                            });
+                        }
+                        Err(e) => {
+                            sp.rollback().await?;
+                            let msg = format!("guardian insert failed: {e}");
+                            if skip_invalid {
+                                errors.push(ImportRowError {
+                                    row: c.row_num,
+                                    field: Some("guardians".into()),
+                                    message: msg,
+                                });
+                                continue;
+                            } else {
+                                tx.rollback().await?;
+                                let response = BulkImportResponse {
+                                    imported: 0,
+                                    skipped: skipped_count + 1,
+                                    errors: vec![ImportRowError {
+                                        row: c.row_num,
+                                        field: Some("guardians".into()),
+                                        message: msg,
+                                    }],
+                                    imported_students: vec![],
+                                };
+                                return Ok((response, false));
+                            }
+                        }
+                    }
                 }
                 Err(sqlx::Error::Database(db)) if db.is_unique_violation() => {
                     sp.rollback().await?;
