@@ -15,7 +15,6 @@ use axum::http::{HeaderValue, Method, StatusCode};
 use axum::Router;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
@@ -50,6 +49,16 @@ use crate::state::AppState;
         handlers::school_setup::get_setup,
         handlers::school_setup::patch_setup,
         handlers::school_setup::get_public_branding,
+        handlers::students::list_students,
+        handlers::students::create_student,
+        handlers::students::get_student,
+        handlers::students::patch_student,
+        handlers::students::delete_student,
+        handlers::students::change_status,
+        handlers::students::change_class,
+        handlers::students::promote,
+        handlers::students::bulk_import,
+        handlers::students::export,
     ),
     components(schemas(
         models::user::UserResponse,
@@ -75,12 +84,31 @@ use crate::state::AppState;
         models::school_setup::SetupCompletion,
         models::school_setup::SectionStatus,
         models::school_setup::PublicBrandingResponse,
+        models::students::CreateStudentRequest,
+        models::students::UpdateStudentRequest,
+        models::students::ChangeStatusRequest,
+        models::students::ChangeClassRequest,
+        models::students::PromoteRequest,
+        models::students::PromoteDecision,
+        models::students::PromoteSummary,
+        models::students::GuardianInput,
+        models::students::GuardianResponse,
+        models::students::StudentResponse,
+        models::students::StudentListResponse,
+        models::students::PaginationInfo,
+        models::students::StudentSummary,
+        models::students::StatusChangeRecord,
+        models::students::StatusChangeResponse,
+        models::students::BulkImportResponse,
+        models::students::ImportRowError,
+        models::students::ImportedStudent,
     )),
     modifiers(&SecurityAddon),
     tags(
         (name = "Health", description = "Health check endpoints"),
         (name = "Auth", description = "Authentication endpoints"),
         (name = "Schools", description = "School setup and branding endpoints"),
+        (name = "Students", description = "Student records, guardians, status/class changes, promotion, CSV import/export"),
     )
 )]
 struct ApiDoc;
@@ -116,8 +144,11 @@ impl Modify for SecurityAddon {
 pub fn build_router(state: AppState) -> Router {
     let cors = build_cors_layer(&state);
 
+    // Body limits are scoped per sub-router (see routes/{auth,schools,students}.rs):
+    // 1MB on most endpoints, 10MB on /api/v1/students/bulk-import only.
+    // tower-http's RequestBodyLimitLayer composes most-restrictive-wins, so a
+    // global limit would cap the upload route too — hence the per-router setup.
     let api_routes = routes::build(state.clone())
-        .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1 MB
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

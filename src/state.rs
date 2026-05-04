@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::config::AppConfig;
 use crate::services::organization::OrganizationService;
 use crate::services::school_setup::SchoolSetupService;
+use crate::services::students::StudentsService;
 use crate::services::user::UserService;
 use crate::services::workos::WorkOsService;
 
@@ -15,6 +16,7 @@ pub struct AppState {
     pub user_service: Arc<UserService>,
     pub organization_service: Arc<OrganizationService>,
     pub school_setup_service: Arc<SchoolSetupService>,
+    pub students_service: Arc<StudentsService>,
 }
 
 impl AppState {
@@ -23,6 +25,7 @@ impl AppState {
         let user_service = Arc::new(UserService::new(db_pool.clone()));
         let organization_service = Arc::new(OrganizationService::new(db_pool.clone()));
         let school_setup_service = Arc::new(SchoolSetupService::new(db_pool.clone()));
+        let students_service = Arc::new(StudentsService::new(db_pool.clone()));
 
         Self {
             config: Arc::new(config),
@@ -31,6 +34,7 @@ impl AppState {
             user_service,
             organization_service,
             school_setup_service,
+            students_service,
         }
     }
 }
