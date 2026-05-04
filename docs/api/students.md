@@ -63,7 +63,7 @@ The `summary` is computed across the entire school and **ignores list filters**.
 
 Create a single student.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 **Required fields:** `first_name`, `last_name`, `date_of_birth`, `gender`, `grade_level`. Everything else is optional.
 
@@ -162,7 +162,7 @@ When `include=recent_payments` is set, the response adds `"recent_payments": []`
 
 Update student fields.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 Send only the fields you want to change. Each field uses a `COALESCE` pattern: passing `null` keeps the existing value. Empty string `""` will overwrite the field with empty.
 
@@ -200,15 +200,17 @@ Soft-delete: marks the student as `withdrawn`, sets `withdrawn_at`, and writes a
 
 After deletion the student is excluded from the default list view (which filters to `status=active`). They reappear when querying `?status=withdrawn` or `?status=all`.
 
-**Auth:** Required (any org member)
+**Idempotent:** calling `DELETE` on an already-withdrawn student returns `204` and does **not** write a duplicate audit row.
+
+**Auth:** Required (org admin)
 
 **Response `204`** (no body).
 
 | Error | Status | When |
 |-------|--------|------|
 | Not authenticated | `401` | Missing or invalid token |
+| Forbidden | `403` | Authenticated user is not an admin |
 | Not found | `404` | No student with that id in this school |
-| Bad request | `400` | Student already has `status=withdrawn` |
 
 ---
 
@@ -216,7 +218,7 @@ After deletion the student is excluded from the default list view (which filters
 
 Change a student's enrollment status with a reason. Records audit history.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 **Request:**
 ```json
@@ -263,7 +265,7 @@ When transitioning to `graduated`, `graduation_date` is set (preserves the exist
 
 Change a student's `grade_level` and/or `section`. Preserves all academic and attendance history; writes a `student_class_history` audit row with `change_kind: "manual"`.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 **Request:**
 ```json
@@ -294,7 +296,7 @@ Bulk promotion at end of academic session. The most critical operation in any SI
 
 Each decision writes one `student_class_history` row sharing a server-generated `promotion_batch_id`, so you can later query a batch's results.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 **Request:**
 ```json
@@ -339,7 +341,7 @@ Each decision writes one `student_class_history` row sharing a server-generated 
 
 Bulk-create students from a CSV upload.
 
-**Auth:** Required (any org member)
+**Auth:** Required (org admin)
 
 **Request:** `multipart/form-data` with these parts:
 

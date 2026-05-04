@@ -1,11 +1,13 @@
 use chrono::Datelike;
+use chrono_tz::Tz;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::errors::AppError;
 
 /// Atomically generate the next admission number for an org.
-/// Pattern: `{prefix}/{year}/{seq:03}`. Sequence resets on year boundary.
+/// Pattern: `{prefix}/{year}/{seq:03}`. Sequence resets on year boundary
+/// **in the school's configured timezone** (falls back to UTC if unset/invalid).
 /// If `admission_number_prefix` is NULL, falls back to the org slug (uppercased).
 ///
 /// Uses INSERT ... ON CONFLICT DO UPDATE so the school_configs row is created
@@ -14,7 +16,19 @@ pub(super) async fn generate_admission_number(
     tx: &mut PgConnection,
     org_id: Uuid,
 ) -> Result<String, AppError> {
-    let current_year: i16 = chrono::Utc::now().year() as i16;
+    // Compute the year in the school's local timezone so a school operating
+    // near midnight on Dec 31 doesn't generate next-year admission numbers.
+    let tz_str: Option<String> =
+        sqlx::query_scalar("SELECT timezone FROM school_configs WHERE org_id = $1")
+            .bind(org_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .flatten();
+    let tz: Tz = tz_str
+        .as_deref()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(chrono_tz::UTC);
+    let current_year: i16 = chrono::Utc::now().with_timezone(&tz).year() as i16;
 
     let row: (Option<String>, i32, String) = sqlx::query_as(
         r#"

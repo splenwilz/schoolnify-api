@@ -45,6 +45,7 @@ config = "0.15"
 # Types
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 
 # Error handling
 thiserror = "2"

@@ -100,6 +100,7 @@ pub async fn list_students(
         (status = 201, description = "Student created", body = StudentResponse),
         (status = 400, description = "Invalid grade_level / gender / boarding_status", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 409, description = "admission_number already exists for this school", body = ErrorResponse),
     )
 )]
@@ -154,6 +155,7 @@ pub async fn get_student(
         (status = 200, description = "Updated student", body = StudentResponse),
         (status = 400, description = "Invalid field value", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
     )
 )]
@@ -176,8 +178,9 @@ pub async fn patch_student(
     security(("session_cookie" = []), ("bearer_token" = [])),
     params(("id" = uuid::Uuid, Path, description = "Student id")),
     responses(
-        (status = 204, description = "Student soft-deleted"),
+        (status = 204, description = "Student soft-deleted (idempotent)"),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
     )
 )]
@@ -203,6 +206,7 @@ pub async fn delete_student(
         (status = 200, description = "Status changed", body = StatusChangeResponse),
         (status = 400, description = "Invalid status or unchanged", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
     )
 )]
@@ -232,6 +236,7 @@ pub async fn change_status(
         (status = 200, description = "Class changed", body = StudentResponse),
         (status = 400, description = "Invalid grade_level for this school", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
     )
 )]
@@ -259,8 +264,9 @@ pub async fn change_class(
     request_body = PromoteRequest,
     responses(
         (status = 200, description = "Promotion summary", body = PromoteSummary),
-        (status = 400, description = "Invalid action / missing to_grade for promote", body = ErrorResponse),
+        (status = 400, description = "Invalid action / missing to_grade for promote / duplicate student_id", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "One or more student_ids not found", body = ErrorResponse),
     )
 )]
@@ -289,8 +295,9 @@ pub async fn promote(
     request_body(content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Imported (with optional row errors)", body = BulkImportResponse),
-        (status = 400, description = "Missing file or mapping", body = ErrorResponse),
+        (status = 400, description = "Missing file or mapping / invalid mapping target", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
+        (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 422, description = "Validation errors and skip_invalid=false", body = BulkImportResponse),
     )
 )]

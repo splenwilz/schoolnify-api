@@ -385,16 +385,20 @@ impl StudentsService {
             )));
         }
 
+        // The bidirectional CHECKs require terminal-state dates iff status matches:
+        // graduated => graduation_date NOT NULL AND withdrawn_at NULL; withdrawn =>
+        // withdrawn_at NOT NULL AND graduation_date NULL; everything else => both NULL.
+        // Per-state history is preserved in student_status_history.
         let updated: StudentRow = sqlx::query_as(
             r#"
             UPDATE students SET
                 status = $3,
                 graduation_date = CASE
                     WHEN $3 = 'graduated' THEN COALESCE(graduation_date, $4)
-                    ELSE graduation_date END,
+                    ELSE NULL END,
                 withdrawn_at = CASE
                     WHEN $3 = 'withdrawn' THEN COALESCE(withdrawn_at, NOW())
-                    ELSE withdrawn_at END
+                    ELSE NULL END
             WHERE id = $1 AND org_id = $2
             RETURNING *
             "#,
@@ -482,9 +486,11 @@ impl StudentsService {
         let _: StudentClassHistoryRow = sqlx::query_as(
             r#"
             INSERT INTO student_class_history
-                (student_id, org_id, from_grade_level, from_section, to_grade_level, to_section,
+                (student_id, org_id,
+                 from_grade_level, from_section, from_stream,
+                 to_grade_level, to_section, to_stream,
                  change_kind, reason, effective_date, changed_by_user_id, promotion_batch_id)
-            VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7, $8, $9, NULL)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', $9, $10, $11, NULL)
             RETURNING *
             "#,
         )
@@ -492,8 +498,10 @@ impl StudentsService {
         .bind(org_id)
         .bind(&current.grade_level)
         .bind(&current.section)
+        .bind(&current.stream)
         .bind(&req.grade_level)
         .bind(&updated.section)
+        .bind(&updated.stream)
         .bind(&req.reason)
         .bind(effective_date)
         .bind(changed_by)

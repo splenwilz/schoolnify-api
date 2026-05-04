@@ -218,8 +218,8 @@ Audit log for grade/section changes. Written by `PATCH /api/v1/students/{id}/cla
 | `id` | UUID | no | `gen_random_uuid()` | Primary key |
 | `student_id` | UUID | no | — | FK → `students(id)` **ON DELETE CASCADE** |
 | `org_id` | UUID | no | — | FK → `organizations(id)` |
-| `from_grade_level`, `from_section` | TEXT | yes | | |
-| `to_grade_level`, `to_section` | TEXT | yes | | |
+| `from_grade_level`, `from_section`, `from_stream` | TEXT | yes | | |
+| `to_grade_level`, `to_section`, `to_stream` | TEXT | yes | | |
 | `change_kind` | TEXT | no | — | CHECK: `promote`, `retain`, `graduate`, `manual` |
 | `reason` | TEXT | yes | | |
 | `effective_date` | DATE | no | `CURRENT_DATE` | |
@@ -227,7 +227,7 @@ Audit log for grade/section changes. Written by `PATCH /api/v1/students/{id}/cla
 | `promotion_batch_id` | UUID | yes | | All rows from one `POST /promote` call share this id |
 | `changed_at` | TIMESTAMPTZ | no | `NOW()` | |
 
-**Indexes:** `(student_id, changed_at DESC)`, `(org_id, changed_at DESC)`, partial `(promotion_batch_id) WHERE NOT NULL`.
+**Indexes:** `(student_id, changed_at DESC)`, `(org_id, changed_at DESC)`, partial `(promotion_batch_id) WHERE promotion_batch_id IS NOT NULL`.
 
 ---
 

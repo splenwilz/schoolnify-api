@@ -58,8 +58,18 @@ CREATE TABLE IF NOT EXISTS students (
     CONSTRAINT students_gender_chk CHECK (gender IN ('male', 'female')),
     CONSTRAINT students_status_chk CHECK (status IN ('active', 'inactive', 'suspended', 'graduated', 'withdrawn', 'transferred')),
     CONSTRAINT students_boarding_chk CHECK (boarding_status IS NULL OR boarding_status IN ('day', 'boarding', 'weekly_boarding')),
-    CONSTRAINT students_graduation_consistency_chk CHECK (status <> 'graduated' OR graduation_date IS NOT NULL),
-    CONSTRAINT students_withdrawn_consistency_chk CHECK (status <> 'withdrawn' OR withdrawn_at IS NOT NULL)
+    -- Bidirectional invariants: graduation_date is set iff status='graduated';
+    -- withdrawn_at is set iff status='withdrawn'. The full timeline lives in
+    -- student_status_history, so the row only carries the dates that match the
+    -- current state. Service layer must clear stale dates on transitions.
+    CONSTRAINT students_graduation_consistency_chk CHECK (
+        (status = 'graduated' AND graduation_date IS NOT NULL)
+        OR (status <> 'graduated' AND graduation_date IS NULL)
+    ),
+    CONSTRAINT students_withdrawn_consistency_chk CHECK (
+        (status = 'withdrawn' AND withdrawn_at IS NOT NULL)
+        OR (status <> 'withdrawn' AND withdrawn_at IS NULL)
+    )
 );
 
 CREATE INDEX idx_students_org_id ON students(org_id);
@@ -146,8 +156,10 @@ CREATE TABLE IF NOT EXISTS student_class_history (
 
     from_grade_level        TEXT,
     from_section            TEXT,
+    from_stream             TEXT,
     to_grade_level          TEXT,
     to_section              TEXT,
+    to_stream               TEXT,
     change_kind             TEXT NOT NULL,
     reason                  TEXT,
     effective_date          DATE NOT NULL DEFAULT CURRENT_DATE,

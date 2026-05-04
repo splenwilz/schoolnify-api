@@ -43,23 +43,32 @@ impl StudentsService {
 
         for s in students {
             let primary = primary_guardian(&guardians_map, &s.id);
-            wtr.write_record([
-                s.admission_number.as_str(),
-                s.first_name.as_str(),
-                s.last_name.as_str(),
-                s.middle_name.as_deref().unwrap_or(""),
-                s.grade_level.as_str(),
-                s.section.as_deref().unwrap_or(""),
-                s.gender.as_str(),
-                &s.date_of_birth.to_string(),
-                s.status.as_str(),
-                s.boarding_status.as_deref().unwrap_or(""),
-                "unknown",
-                primary.as_ref().map(|g| guardian_name(g)).unwrap_or_default().as_str(),
-                primary.as_ref().and_then(|g| g.phone.as_deref()).unwrap_or(""),
-                primary.as_ref().and_then(|g| g.email.as_deref()).unwrap_or(""),
-            ])
-            .map_err(|e| AppError::Internal(format!("csv row: {e}")))?;
+            let dob = s.date_of_birth.to_string();
+            let g_name = primary.as_ref().map(|g| guardian_name(g)).unwrap_or_default();
+            let g_phone = primary.as_ref().and_then(|g| g.phone.as_deref()).unwrap_or("");
+            let g_email = primary.as_ref().and_then(|g| g.email.as_deref()).unwrap_or("");
+
+            // Every user-controlled cell goes through CSV-injection sanitization
+            // so a name/phone/email starting with =, +, -, @ or tab can't be
+            // interpreted as a formula when opened in Excel/Sheets.
+            let row = [
+                csv_safe(&s.admission_number),
+                csv_safe(&s.first_name),
+                csv_safe(&s.last_name),
+                csv_safe(s.middle_name.as_deref().unwrap_or("")),
+                csv_safe(&s.grade_level),
+                csv_safe(s.section.as_deref().unwrap_or("")),
+                csv_safe(&s.gender),
+                csv_safe(&dob),
+                csv_safe(&s.status),
+                csv_safe(s.boarding_status.as_deref().unwrap_or("")),
+                csv_safe("unknown"),
+                csv_safe(&g_name),
+                csv_safe(g_phone),
+                csv_safe(g_email),
+            ];
+            wtr.write_record(&row)
+                .map_err(|e| AppError::Internal(format!("csv row: {e}")))?;
         }
 
         wtr.flush()
@@ -79,4 +88,15 @@ fn primary_guardian<'a>(
 
 fn guardian_name(g: &StudentGuardianRow) -> String {
     format!("{} {}", g.first_name, g.last_name).trim().to_string()
+}
+
+/// Neutralize CSV-formula characters at the start of a cell.
+/// If the value begins with `=`, `+`, `-`, `@`, tab, or carriage return,
+/// prefix with a single quote so spreadsheet apps treat it as text.
+fn csv_safe(value: &str) -> String {
+    if matches!(value.chars().next(), Some('=' | '+' | '-' | '@' | '\t' | '\r')) {
+        format!("'{value}")
+    } else {
+        value.to_string()
+    }
 }

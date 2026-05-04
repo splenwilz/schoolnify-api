@@ -806,6 +806,122 @@ async fn test_bulk_import_savepoints_isolate_duplicate_admission() {
 
 #[tokio::test]
 #[serial]
+async fn test_promote_rejects_duplicate_student_id() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "admin").await;
+
+    let app = test_router(state.clone());
+    let (_, body) =
+        post_json_auth(app, "/api/v1/students", min_student("Primary 1"), &school.token).await;
+    let id = body["id"].as_str().unwrap().to_string();
+
+    // Two contradictory decisions for the same student.
+    let app = test_router(state.clone());
+    let (status, body) = post_json_auth(
+        app,
+        "/api/v1/students/promote",
+        json!({
+            "decisions": [
+                { "student_id": id, "action": "promote", "to_grade": "Primary 2" },
+                { "student_id": id, "action": "graduate" }
+            ]
+        }),
+        &school.token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+    let msg = body["error"]["message"].as_str().unwrap_or("");
+    assert!(msg.contains("duplicate student_id"), "got: {msg}");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_bulk_import_rejects_invalid_mapping_target() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "admin").await;
+
+    let csv = b"first_name,phonee\nAda,12345\n";
+    // "phonee" is a typo of "phone" — must be rejected up front instead of
+    // silently dropping the column.
+    let mapping = json!({
+        "first_name": "first_name",
+        "phonee": "phonee"
+    })
+    .to_string();
+
+    let app = test_router(state.clone());
+    let (status, body) = multipart_post(
+        app,
+        "/api/v1/students/bulk-import",
+        vec![
+            ("file", Some("students.csv"), csv.to_vec()),
+            ("mapping", None, mapping.into_bytes()),
+            ("skip_invalid", None, b"true".to_vec()),
+        ],
+        &school.token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_export_sanitizes_csv_formula_injection() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "admin").await;
+
+    // Seed a student whose first name starts with "=" — would be interpreted
+    // as a formula by Excel/Sheets without sanitization.
+    let app = test_router(state.clone());
+    let (s, _) = post_json_auth(
+        app,
+        "/api/v1/students",
+        json!({
+            "first_name": "=cmd|'/c calc'!A1",
+            "last_name": "Evil",
+            "date_of_birth": "2017-12-10",
+            "gender": "female",
+            "grade_level": "Primary 1"
+        }),
+        &school.token,
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    let app = test_router(state.clone());
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/students/export")
+        .header("authorization", format!("Bearer {}", school.token))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(bytes.to_vec()).unwrap();
+
+    // The injection-prone first_name must be prefixed with `'` so spreadsheet
+    // apps treat it as a string literal instead of a formula. The cell ends up
+    // as `'=cmd|...`, which appears after the comma boundary in the CSV.
+    assert!(
+        text.contains(",'=cmd|"),
+        "expected sanitized cell starting with `'=cmd|`; got:\n{text}"
+    );
+    // The raw `,=cmd...` (no leading single quote) must not appear, otherwise
+    // the export would still execute as a formula.
+    assert!(
+        !text.contains(",=cmd|"),
+        "raw '=cmd|' leaked into export: {text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn test_cross_tenant_access_returns_404() {
     let mock_server = MockServer::start().await;
     mount_jwks_endpoint(&mock_server).await;

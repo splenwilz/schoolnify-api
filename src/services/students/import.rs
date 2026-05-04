@@ -60,6 +60,10 @@ impl StudentsService {
         skip_invalid: bool,
         _changed_by: Option<Uuid>,
     ) -> Result<(BulkImportResponse, bool), AppError> {
+        // Reject typos like "phonee" or "guardian_phone" up front so column data
+        // isn't silently dropped during the per-row build_candidate phase.
+        validate_mapping(&mapping)?;
+
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
             .trim(csv::Trim::All)
@@ -442,6 +446,74 @@ fn build_candidate(
         avatar_url: fields.remove("avatar_url"),
         guardians,
     })
+}
+
+const STUDENT_FIELD_KEYS: &[&str] = &[
+    "first_name",
+    "middle_name",
+    "last_name",
+    "date_of_birth",
+    "gender",
+    "grade_level",
+    "section",
+    "stream",
+    "admission_number",
+    "enrollment_date",
+    "boarding_status",
+    "phone",
+    "email",
+    "address",
+    "city",
+    "state",
+    "postal_code",
+    "blood_group",
+    "genotype",
+    "allergies",
+    "medical_conditions",
+    "previous_school",
+    "state_of_origin",
+    "lga",
+    "religion",
+    "tribe",
+    "avatar_url",
+];
+
+const GUARDIAN_SUBFIELD_KEYS: &[&str] = &[
+    "first_name",
+    "last_name",
+    "phone",
+    "email",
+    "relationship",
+    "occupation",
+];
+
+/// Validate that every mapping target is either a recognized student field
+/// or a `guardianN_<subfield>` where N is 1..=3 and subfield is recognized.
+/// Returns 400 with the offending header on first invalid target.
+fn validate_mapping(mapping: &HashMap<String, String>) -> Result<(), AppError> {
+    for (header, target) in mapping {
+        let t = target.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if STUDENT_FIELD_KEYS.contains(&t) {
+            continue;
+        }
+        // Try the guardian shape. parse_guardian_key only returns Some for
+        // valid 1..=3 indexes, so an out-of-range index falls through here.
+        if let Some((_, sub)) = parse_guardian_key(t) {
+            if GUARDIAN_SUBFIELD_KEYS.contains(&sub) {
+                continue;
+            }
+            return Err(AppError::BadRequest(format!(
+                "Invalid mapping for header '{header}': '{t}' references unknown guardian field"
+            )));
+        }
+        return Err(AppError::BadRequest(format!(
+            "Invalid mapping for header '{header}': '{t}' is not a recognized field"
+        )));
+    }
+    Ok(())
 }
 
 /// Parse `guardian1_first_name` → Some((1, "first_name")).

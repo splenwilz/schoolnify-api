@@ -193,7 +193,7 @@ Key callouts:
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | UUID | Server-generated |
-| `admission_number` | string | Unique per school. Format `{prefix}/{year}/{seq:03}` |
+| `admission_number` | string | Unique per school. Auto-generated values follow `{prefix}/{year}/{seq:03}`; admin-supplied values are accepted as-is. |
 | `gender` | enum | `male` or `female` |
 | `status` | enum | `active`, `inactive`, `suspended`, `graduated`, `withdrawn`, `transferred` |
 | `gpa` | float? | **Always `null` until grades module ships** |
