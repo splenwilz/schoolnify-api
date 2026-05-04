@@ -1,6 +1,7 @@
 use axum::middleware as axum_mw;
 use axum::routing::get;
 use axum::Router;
+use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::handlers::school_setup;
 use crate::state::AppState;
@@ -19,5 +20,7 @@ pub fn router(state: AppState) -> Router<AppState> {
             crate::middleware::auth::require_auth,
         ));
 
-    public.merge(protected)
+    public
+        .merge(protected)
+        .layer(RequestBodyLimitLayer::new(1024 * 1024))
 }

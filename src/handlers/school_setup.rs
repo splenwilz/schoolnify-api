@@ -160,6 +160,7 @@ fn assemble_json(data: &SchoolSetupData) -> serde_json::Value {
     insert_str(&mut sec, "motto", &c.motto);
     insert_str(&mut sec, "founded_year", &c.founded_year);
     insert_str(&mut sec, "accreditation_number", &c.accreditation_number);
+    insert_str(&mut sec, "admission_number_prefix", &c.admission_number_prefix);
     if !sec.is_empty() { root.insert("identity".into(), json!(sec)); }
 
     // Branding

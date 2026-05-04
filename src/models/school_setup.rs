@@ -18,6 +18,10 @@ pub struct SchoolConfigRow {
     pub founded_year: Option<String>,
     pub accreditation_number: Option<String>,
     pub logo_url: Option<String>,
+    // Admission number config (set via identity section; counters managed by students service)
+    pub admission_number_prefix: Option<String>,
+    pub admission_number_seq_year: Option<i16>,
+    pub admission_number_next_seq: i32,
     // Branding
     pub primary_color: Option<String>,
     pub secondary_color: Option<String>,
