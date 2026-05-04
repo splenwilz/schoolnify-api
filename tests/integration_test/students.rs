@@ -870,6 +870,42 @@ async fn test_bulk_import_rejects_invalid_mapping_target() {
 
 #[tokio::test]
 #[serial]
+async fn test_bulk_import_rejects_duplicate_target() {
+    let mock_server = MockServer::start().await;
+    mount_jwks_endpoint(&mock_server).await;
+    let state = test_app_state(&mock_server).await;
+    let school = setup_school(&state, &mock_server, "admin").await;
+
+    // Two distinct headers point at the same target — one would silently win
+    // during row parsing, so the API must reject up front.
+    let csv = b"First Name,Given Name\nAda,Lovelace\n";
+    let mapping = json!({
+        "First Name": "first_name",
+        "Given Name": "first_name"
+    })
+    .to_string();
+
+    let app = test_router(state.clone());
+    let (status, body) = multipart_post(
+        app,
+        "/api/v1/students/bulk-import",
+        vec![
+            ("file", Some("students.csv"), csv.to_vec()),
+            ("mapping", None, mapping.into_bytes()),
+            ("skip_invalid", None, b"true".to_vec()),
+        ],
+        &school.token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+    let msg = body["error"]["message"].as_str().unwrap_or("");
+    assert!(msg.contains("Duplicate mapping target"), "got: {msg}");
+    // Both source headers should be named so the user can fix the CSV.
+    assert!(msg.contains("First Name") && msg.contains("Given Name"), "got: {msg}");
+}
+
+#[tokio::test]
+#[serial]
 async fn test_export_sanitizes_csv_formula_injection() {
     let mock_server = MockServer::start().await;
     mount_jwks_endpoint(&mock_server).await;

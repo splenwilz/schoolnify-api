@@ -269,6 +269,7 @@ users                    organizations            school_configs
 | `20260419000001_normalize_school_setups.sql` | Normalize to school_configs + 8 child tables, drop school_setups |
 | `20260503000001_create_students.sql` | students, student_guardians, student_status_history, student_class_history |
 | `20260503000002_add_admission_number_config.sql` | Add `admission_number_prefix`, `admission_number_seq_year`, `admission_number_next_seq` to school_configs |
+| `20260503000003_align_students_schema.sql` | Bidirectional consistency CHECKs on students, composite `(student_id, org_id)` FKs on guardian/history tables, status-history enum CHECKs, `from_stream`/`to_stream` columns on `student_class_history` |
 
 ### Running Migrations
 

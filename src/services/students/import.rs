@@ -489,29 +489,36 @@ const GUARDIAN_SUBFIELD_KEYS: &[&str] = &[
 
 /// Validate that every mapping target is either a recognized student field
 /// or a `guardianN_<subfield>` where N is 1..=3 and subfield is recognized.
-/// Returns 400 with the offending header on first invalid target.
+/// Also reject duplicate targets — two CSV columns mapping to the same field
+/// would silently overwrite during row parsing. Returns 400 on first violation.
 fn validate_mapping(mapping: &HashMap<String, String>) -> Result<(), AppError> {
+    let mut seen_targets: HashMap<&str, &str> = HashMap::new();
     for (header, target) in mapping {
         let t = target.trim();
         if t.is_empty() {
             continue;
         }
-        if STUDENT_FIELD_KEYS.contains(&t) {
-            continue;
-        }
-        // Try the guardian shape. parse_guardian_key only returns Some for
-        // valid 1..=3 indexes, so an out-of-range index falls through here.
-        if let Some((_, sub)) = parse_guardian_key(t) {
-            if GUARDIAN_SUBFIELD_KEYS.contains(&sub) {
-                continue;
+        // Per-target shape validation.
+        let valid = STUDENT_FIELD_KEYS.contains(&t)
+            || matches!(parse_guardian_key(t), Some((_, sub)) if GUARDIAN_SUBFIELD_KEYS.contains(&sub));
+        if !valid {
+            // Distinguish guardian-subfield typos from totally unknown targets.
+            if let Some((_, sub)) = parse_guardian_key(t) {
+                let _ = sub;
+                return Err(AppError::BadRequest(format!(
+                    "Invalid mapping for header '{header}': '{t}' references unknown guardian field"
+                )));
             }
             return Err(AppError::BadRequest(format!(
-                "Invalid mapping for header '{header}': '{t}' references unknown guardian field"
+                "Invalid mapping for header '{header}': '{t}' is not a recognized field"
             )));
         }
-        return Err(AppError::BadRequest(format!(
-            "Invalid mapping for header '{header}': '{t}' is not a recognized field"
-        )));
+        // Duplicate-target check — fail fast with both source headers named.
+        if let Some(prev) = seen_targets.insert(t, header.as_str()) {
+            return Err(AppError::BadRequest(format!(
+                "Duplicate mapping target '{t}': both '{prev}' and '{header}' map to it"
+            )));
+        }
     }
     Ok(())
 }

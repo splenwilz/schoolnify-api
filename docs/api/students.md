@@ -445,14 +445,11 @@ The full canonical Student response shape.
   "gender": "female",
   "grade_level": "Primary 1",
   "section": "A",
-  "stream": null,
 
   "enrollment_date": "2024-09-09",
   "status": "active",
   "boarding_status": "day",
 
-  "phone": null,
-  "email": null,
   "address": "23 Adeola Odeku Street",
   "city": "Lagos",
   "state": "Lagos",
@@ -474,13 +471,11 @@ The full canonical Student response shape.
   "blood_group": "O+",
   "genotype": "AA",
   "allergies": "Peanuts",
-  "medical_conditions": null,
   "previous_school": "Sunrise Pre-school",
   "state_of_origin": "Anambra",
   "lga": "Onitsha North",
   "religion": "Christianity",
   "tribe": "Igbo",
-  "avatar_url": null,
 
   "gpa": null,
   "attendance_rate": null,

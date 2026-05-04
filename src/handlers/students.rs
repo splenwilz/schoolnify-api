@@ -76,6 +76,7 @@ async fn resolve_admin_and_org(
     ),
     responses(
         (status = 200, description = "Page of students with summary", body = StudentListResponse),
+        (status = 400, description = "User has no organization", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
     )
 )]
@@ -126,6 +127,7 @@ pub async fn create_student(
     ),
     responses(
         (status = 200, description = "Student detail", body = StudentResponse),
+        (status = 400, description = "User has no organization", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
     )
@@ -179,6 +181,7 @@ pub async fn patch_student(
     params(("id" = uuid::Uuid, Path, description = "Student id")),
     responses(
         (status = 204, description = "Student soft-deleted (idempotent)"),
+        (status = 400, description = "User has no organization", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
         (status = 403, description = "Forbidden — requires admin", body = ErrorResponse),
         (status = 404, description = "Student not found in this school", body = ErrorResponse),
@@ -367,6 +370,7 @@ pub async fn bulk_import(
     security(("session_cookie" = []), ("bearer_token" = [])),
     responses(
         (status = 200, description = "CSV file (text/csv)", content_type = "text/csv"),
+        (status = 400, description = "User has no organization", body = ErrorResponse),
         (status = 401, description = "Not authenticated", body = ErrorResponse),
     )
 )]
